@@ -7,7 +7,7 @@ import shutil
 from torchvision.datasets import ImageFolder
 
 
-def data_loader():
+def create_data_set(color_mode='gray', batch_size=64):
     # Define transformations
     transform = transforms.Compose([
         transforms.Resize((64, 64)),  # Resize images to a fixed size
@@ -15,13 +15,18 @@ def data_loader():
         transforms.Normalize((0.5,), (0.5,))  # Normalize images
     ])
 
-    # Define a custom target_transform function that returns the same label for all images
-    # Create the ImageFolder dataset using the custom target_transform
-    dataset = ImageFolder(root=r'flowers_gray_class', transform=transform)
+    if color_mode == 'gray':
+        dataset_path = 'flowers_gray_class'
+    elif color_mode == 'rgb':
+        dataset_path = 'flowers_rgb_class'
+    else:
+        raise ValueError("Invalid color mode. Use 'gray' or 'rgb'.")
 
-    data_path = r'flowers_gray_class/splited_data'
+    # Create the ImageFolder dataset using the custom target_transform
+    dataset = ImageFolder(root=dataset_path, transform=transform)
 
     # Path to destination folders
+    data_path = os.path.join(dataset_path, 'splited_data')
     train_folder = os.path.join(data_path, 'train')
     val_folder = os.path.join(data_path, 'eval')
     test_folder = os.path.join(data_path, 'test')
@@ -32,48 +37,69 @@ def data_loader():
     # Create a list of image filenames in 'data_path'
     imgs_list = [filename for filename in os.listdir(data_path) if os.path.splitext(filename)[-1] in image_extensions]
 
-    # Sets the random seed
-    random.seed(42)
-
-    # Shuffle the list of image filenames
-    random.shuffle(imgs_list)
-
-    # determine the number of images for each set
-    train_size = int(len(imgs_list) * 0.7)
-    val_size = int(len(imgs_list) * 0.15)
-    test_size = int(len(imgs_list) * 0.15)
-
     # Create destination folders if they don't exist
     for folder_path in [train_folder, val_folder, test_folder]:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
+
+    return train_folder, val_folder, test_folder,imgs_list,data_path,dataset
+
+
+def data_loader():
+    train_folder_gray, val_folder_gray, test_folder_gray, imgs_list_gray, data_path_gray, dataset_gray = create_data_set(color_mode='gray', batch_size=64)
+    train_folder_rgb, val_folder_rgb, test_folder_rgb, imgs_list_rgb, data_path_rgb, dataset_rgb = create_data_set(color_mode='rgb', batch_size=64)
+    # Sets the random seed
+    random.seed(42)
+
+    # Shuffle the list of image filenames
+    random.shuffle(imgs_list_gray)
+
+    # determine the number of images for each set
+    train_size = int(len(imgs_list_gray) * 0.7)
+    val_size = int(len(imgs_list_gray) * 0.15)
+    test_size = int(len(imgs_list_gray) * 0.15)
 
     # Save index for each img
     train_idx = []
     test_idx = []
     eval_idx = []
     # Copy image files to destination folders
-    for i, f in enumerate(imgs_list):
+    for i, f in enumerate(imgs_list_gray):
         if i < train_size:
-            dest_folder = train_folder
+            dest_folder = train_folder_gray
+            dest_folder_rgb = train_folder_rgb
             train_idx.append(i)
         elif i < train_size + val_size:
-            dest_folder = val_folder
+            dest_folder = val_folder_gray
+            dest_folder_rgb = val_folder_rgb
             eval_idx.append(i)
         else:
-            dest_folder = test_folder
+            dest_folder = test_folder_gray
+            dest_folder_rgb = test_folder_rgb
             test_idx.append(i)
-        shutil.copy(os.path.join(data_path, f), os.path.join(dest_folder, f))
+        shutil.copy(os.path.join(data_path_gray, f), os.path.join(dest_folder, f))
+        shutil.copy(os.path.join(data_path_rgb, f), os.path.join(dest_folder_rgb, f))
 
     # Create dataSet
-    train_dataset = torch.utils.data.Subset(dataset, train_idx)
-    test_dataset = torch.utils.data.Subset(dataset, test_idx)
-    eval_dataset = torch.utils.data.Subset(dataset, eval_idx)
+    # Gray
+    train_dataset_gray = torch.utils.data.Subset(dataset_gray, train_idx)
+    test_dataset_gray = torch.utils.data.Subset(dataset_gray, test_idx)
+    eval_dataset_gray = torch.utils.data.Subset(dataset_gray, eval_idx)
+    # RGB
+    train_dataset_rgb = torch.utils.data.Subset(dataset_rgb, train_idx)
+    test_dataset_rgb = torch.utils.data.Subset(dataset_rgb, test_idx)
+    eval_dataset_rgb = torch.utils.data.Subset(dataset_rgb, eval_idx)
 
     # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    eval_loader = DataLoader(eval_dataset, batch_size=32)
-    test_loader = DataLoader(test_dataset, batch_size=32)
+    train_loader_gray = DataLoader(train_dataset_gray, batch_size=32, shuffle=True)
+    eval_loader_gray = DataLoader(eval_dataset_gray, batch_size=32)
+    test_loader_gray = DataLoader(test_dataset_gray, batch_size=32)
+    train_loader_rgb = DataLoader(train_dataset_rgb, batch_size=32, shuffle=True)
+    eval_loader_rgb = DataLoader(eval_dataset_rgb, batch_size=32)
+    test_loader_rgb = DataLoader(test_dataset_rgb, batch_size=32)
 
-    return train_dataset, eval_loader, test_dataset, train_loader, eval_loader, test_loader
+    return (train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray,
+            train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb)
+
+
 
