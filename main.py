@@ -1,23 +1,31 @@
+import cv2
+import numpy as np
+
 from DataLoader import data_loader
 from PreProcessingHandler import PreProcessing
 from Gan import UNetGenerator, Discriminator
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import transforms
 from torchvision.utils import save_image
+import matplotlib.pyplot as plt
+
+# Define a function to display images
+def show_images(images):
+    fig, axs = plt.subplots(1, len(images), figsize=(10, 5))
+    for i, img in enumerate(images):
+        img_np = img.permute(1, 2, 0).detach().cpu().numpy()
+        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+        axs[i].imshow(img_np)
+        axs[i].axis('off')
+    plt.show()
 
 def main():
-    pre_processing = PreProcessing()
+    # pre_processing = PreProcessing()
     # pre_processing.convert_folder_to_grayscale("flowers_color", "flowers_gray")
-    
     # max_width, max_height = pre_processing.find_largest_image_size("flowers_gray")
     # target_size = (max_width, max_height)
-    # # pre_processing.resize_images("flowers_gray", target_size)
-    # pre_processing.extend_dataSet_laplacian("flowers_gray","extended_dataSet",4)
-    # pre_processing.resize_images("extended_dataSet", target_size)
-    # pre_processing.resize_and_replace_images("extended_dataSet","extended_dataSet", max_width, max_height)
+    # pre_processing.resize_images("flowers_gray", target_size)
 
 
 
@@ -27,8 +35,6 @@ def main():
     batch_size = 64
     num_epochs = 5
 
-    #disc
-
     train_dataset, val_dataset, test_dataset, train_loader, val_loader, test_loader = data_loader()
 
     # Initialize networks
@@ -36,7 +42,8 @@ def main():
     discriminator = Discriminator().to(device)
 
     # Define loss function and optimizers
-    criterion = nn.BCELoss()
+    criterion_gan = nn.BCEWithLogitsLoss()
+
     optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
     optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
@@ -47,6 +54,7 @@ def main():
             valid = torch.ones(imgs.size(0), 1).to(device)
             fake = torch.zeros(imgs.size(0), 1).to(device)
 
+            # for img in imgs:
             # Configure input
             real_imgs = imgs.to(device)
 
@@ -57,9 +65,11 @@ def main():
 
             # Generate RGB images from grayscale
             gen_imgs = generator(real_imgs)
+            fake_pred = discriminator(gen_imgs)
+            fake_pred_2d = fake_pred[:, :, 0, 0]
 
             # Loss measures generator's ability to fool the discriminator
-            g_loss = criterion(discriminator(gen_imgs), valid)
+            g_loss = criterion_gan(fake_pred_2d, valid)
 
             g_loss.backward()
             optimizer_G.step()
@@ -69,9 +79,16 @@ def main():
             # ---------------------
             optimizer_D.zero_grad()
 
+
             # Measure discriminator's ability to classify real and fake images
-            real_loss = criterion(discriminator(real_imgs), valid)
-            fake_loss = criterion(discriminator(gen_imgs.detach()), fake)
+            d_real_imgs = discriminator(real_imgs)
+            d_real_imgs_2d = d_real_imgs[:, :, 0, 0]
+            real_loss = criterion_gan(d_real_imgs_2d, valid)
+
+            d_gen_imgs = discriminator(gen_imgs.detach())
+            d_gen_imgs_2d = d_gen_imgs[:, :, 0, 0]
+            fake_loss = criterion_gan(d_gen_imgs_2d, fake)
+
             d_loss = 0.5 * (real_loss + fake_loss)
 
             d_loss.backward()
@@ -82,9 +99,11 @@ def main():
                 % (epoch, num_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
             )
 
+
             batches_done = epoch * len(train_loader) + i
             if batches_done % 100 == 0:
-                save_image(gen_imgs.data[:25], "images/%d.png" % batches_done, nrow=5, normalize=True)
+                show_images(gen_imgs[:5])
+                save_image(gen_imgs.data[:25], "images/%d.jpg" % batches_done, nrow=5, normalize=True)
 
 
 if __name__ == "__main__":

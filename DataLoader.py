@@ -6,10 +6,6 @@ import random
 import shutil
 from torchvision.datasets import ImageFolder
 
-# Define a custom target_transform function that returns the same label for all images
-# def dummy_label(_):
-#     return 0  # Assign the same label for all images
-#
 
 def data_loader():
     # Define transformations
@@ -19,10 +15,11 @@ def data_loader():
         transforms.Normalize((0.5,), (0.5,))  # Normalize images
     ])
 
+    # Define a custom target_transform function that returns the same label for all images
     # Create the ImageFolder dataset using the custom target_transform
-    dataset = ImageFolder(root=r'dummy', transform=transform)
+    dataset = ImageFolder(root=r'flowers_gray_class', transform=transform)
 
-    data_path = r'dummy/splited_data'
+    data_path = r'flowers_gray_class/splited_data'
 
     # Path to destination folders
     train_folder = os.path.join(data_path, 'train')
