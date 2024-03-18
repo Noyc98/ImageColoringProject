@@ -10,6 +10,7 @@ import torch.optim as optim
 from torchvision.utils import save_image
 import matplotlib.pyplot as plt
 
+
 # Define a function to display images
 def show_images(images):
     fig, axs = plt.subplots(1, len(images), figsize=(10, 5))
@@ -20,6 +21,7 @@ def show_images(images):
         axs[i].axis('off')
     plt.show()
 
+
 def main():
     # pre_processing = PreProcessing()
     # pre_processing.convert_folder_to_grayscale("flowers_color", "flowers_gray")
@@ -27,15 +29,13 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-
-
     # Define training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lr = 0.0002
     batch_size = 64
     num_epochs = 5
 
-    train_dataset, val_dataset, test_dataset, train_loader, val_loader, test_loader = data_loader()
+    train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray, train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb = data_loader()
 
     # Initialize networks
     generator = UNetGenerator().to(device)
@@ -49,7 +49,7 @@ def main():
 
     # Training loop
     for epoch in range(num_epochs):
-        for i, (imgs, _) in enumerate(train_loader):
+        for i, (imgs, _) in enumerate(train_loader_gray):
             # Adversarial ground truths
             valid = torch.ones(imgs.size(0), 1).to(device)
             fake = torch.zeros(imgs.size(0), 1).to(device)
@@ -79,7 +79,6 @@ def main():
             # ---------------------
             optimizer_D.zero_grad()
 
-
             # Measure discriminator's ability to classify real and fake images
             d_real_imgs = discriminator(real_imgs)
             d_real_imgs_2d = d_real_imgs[:, :, 0, 0]
@@ -96,11 +95,10 @@ def main():
 
             print(
                 "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                % (epoch, num_epochs, i, len(train_loader), d_loss.item(), g_loss.item())
+                % (epoch, num_epochs, i, len(train_loader_gray), d_loss.item(), g_loss.item())
             )
 
-
-            batches_done = epoch * len(train_loader) + i
+            batches_done = epoch * len(train_loader_gray) + i
             if batches_done % 100 == 0:
                 show_images(gen_imgs[:5])
                 save_image(gen_imgs.data[:25], "images/%d.jpg" % batches_done, nrow=5, normalize=True)
