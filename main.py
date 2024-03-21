@@ -1,4 +1,3 @@
-import torch
 from matplotlib import pyplot as plt
 
 from DataLoader import data_loader
@@ -17,15 +16,6 @@ def plot_graph_loss(loss, title):
     plt.show()
     return
 
-
-def plot_graphs(train_loss_per_epoch, test_loss_per_epoch, accuracy_per_epoch):
-    # plot_graph_acc(accuracy_per_epoch)
-    plot_graph_loss(train_loss_per_epoch, test_loss_per_epoch)
-    plot_graph_loss(train_loss_per_epoch, test_loss_per_epoch)
-    plot_graph_loss(train_loss_per_epoch, test_loss_per_epoch)
-    plot_graph_loss(train_loss_per_epoch, test_loss_per_epoch)
-
-
 def main():
     # pre_processing = PreProcessing()
     # pre_processing.convert_folder_to_grayscale("flowers_rgb_class/splited_data", "flowers_gray_class/splited_data")
@@ -33,10 +23,10 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray, train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb = data_loader()
+    (train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray,
+     train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb) = data_loader()
 
-    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
-                                 train_loader_gray,
+    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,train_loader_gray,
                                  eval_loader_gray, test_loader_gray, 64, 5, 0.0002, 0.0002)
     # Define Time
     # start = torch.cuda.Event(enable_timing=True)
@@ -44,7 +34,7 @@ def main():
 
     # Train Model
     # start.record()
-    # model_handler.pretrain_generator()
+    model_handler.pretrain_generator()
 
     g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g = model_handler.train()
     # end.record()
