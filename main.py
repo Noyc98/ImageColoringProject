@@ -1,9 +1,12 @@
+import pickle
+
 from matplotlib import pyplot as plt
 
 from DataLoader import data_loader
 from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
-
+BATCH_SIZE = 10
+EPOCHS = 5
 
 def plot_graph_loss(loss, title):
     plt.cla()
@@ -23,25 +26,48 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    (train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray,
-     train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb) = data_loader()
+    data = data_loader()
+    load_path = 'saved_models_ImageColoringProject/preTrain/data_loader.pkl'
+    # Load the saved DataLoader objects and datasets
+    with open(load_path, 'rb') as f:
+        loaded_data = pickle.load(f)
 
-    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,train_loader_gray,
-                                 eval_loader_gray, test_loader_gray, 64, 5, 0.0002, 0.0002)
+    # Unpack the loaded data
+    train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray, train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb = loaded_data
+
+    print("Finished data loading!")
+    # Define and initialize your model handler
+    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
+                                 train_loader_gray,
+                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, 0.0002, 0.0002)
+    print("Finished ModelHandler!")
+
     # Define Time
     # start = torch.cuda.Event(enable_timing=True)
     # end = torch.cuda.Event(enable_timing=True)
+    # print(torch.cuda.is_available())
 
     # Train Model
     # start.record()
-    model_handler.pretrain_generator()
-
+    # model_handler.pretrain_generator()
+    # end.record()
+    # torch.cuda.synchronize()
+    # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
+    # start.record()
     g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g = model_handler.train()
     # end.record()
+    # torch.cuda.synchronize()
+    # print(f"Training time: {start.elapsed_time(end)} milliseconds")
+
     model_handler.results_visualization()
+
+    # plots
     plot_graph_loss(g_loss_per_epoch, "g_loss_per_epoch")
     plot_graph_loss(d_loss_per_epoch, "d_loss_per_epoch")
 
+    # Convert CUDA tensors to numpy arrays
+    test_losses_g = [l.item() for l in test_losses_g]
+    val_losses_g = [l.item() for l in val_losses_g]
     plot_graph_loss(test_losses_g, "test_losses_g")
     plot_graph_loss(val_losses_g, "val_losses_g")
 
