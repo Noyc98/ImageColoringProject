@@ -1,0 +1,272 @@
+
+from torchvision.utils import save_image
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+from torch import nn, optim
+from PIL import Image
+from Gan import UNetGenerator, Discriminator
+
+BATCH_SIZE = 10
+EPOCHS = 5
+
+
+def prepare_to_save_image(image):
+    image_np = image.permute(1, 2, 0).detach().cpu().numpy()
+    return (image_np - image_np.min()) / (image_np.max() - image_np.min())
+
+
+def make_subplot(rbg_image, grey_image, gen_image):
+    # Plot images
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+
+    axs[0].imshow(rbg_image)
+    axs[0].axis('off')
+
+    axs[1].imshow(grey_image.squeeze(), cmap='gray')
+    axs[1].axis('off')
+
+    axs[2].imshow(gen_image)
+    axs[2].axis('off')
+
+    plt.tight_layout()
+    return plt
+
+def psnr(input_image, target_image):
+    """
+    Computes the PSNR between the input and target images.
+    """
+    mse = torch.mean((input_image - target_image) ** 2)
+    psnr_val = 10 * torch.log10(1 / mse)
+    return psnr_val
+
+
+def compute_psnr(loader_gray, loader_rgb, model_handler):
+    psnr_values = []
+    with torch.no_grad():
+        for (gray_images, _), (rgb_images, _) in zip(loader_gray, loader_rgb):
+            gray_images = gray_images.to("cuda")
+            rgb_images = rgb_images.to("cuda")
+            gen_images = model_handler.generator(gray_images)
+            psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+    avg_psnr = sum(psnr_values) / len(psnr_values)
+    return avg_psnr
+
+
+class ModelHandler:
+    def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray,
+                 eval_loader_gray,
+                 test_loader_gray, batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=0.0002, lr_D=0.0002,
+                 num_epochs_pre=EPOCHS):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.num_epochs = num_epochs
+        self.num_epochs_pre = num_epochs_pre
+        self.lr_G = lr_G
+        self.lr_D = lr_D
+        self.batch_size = batch_size
+        self.train_loader_rgb = train_loader_rgb
+        self.eval_loader_rgb = eval_loader_rgb
+        self.test_loader_rgb = test_loader_rgb
+        self.train_loader_gray = train_loader_gray
+        self.eval_loader_gray = eval_loader_gray
+        self.test_loader_gray = test_loader_gray
+        self.test_dataset_gray = test_dataset_gray
+        self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
+        self.MSEcriterion = nn.MSELoss()
+        self.generator = UNetGenerator().to(self.device)
+        self.discriminator = Discriminator().to(self.device)
+        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
+        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
+
+    def pretrain_generator(self):
+        save_dir = 'saved_models_ImageColoringProject'
+        os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
+
+        for epoch in range(self.num_epochs_pre):
+            for idx, ((gray_images, _), (rgb_images, _)) in enumerate(
+                    zip(self.train_loader_gray, self.train_loader_rgb)):
+                # Configure input
+                gray_images = gray_images.to(self.device)
+                rgb_images = rgb_images.to(self.device)
+
+                gen_images = self.generator(gray_images)
+                loss = self.MSEcriterion(gen_images, rgb_images)
+                self.optimizer_G.zero_grad()
+                loss.backward()
+                self.optimizer_G.step()
+
+                # Save the generated images
+                os.makedirs("generated_images", exist_ok=True)
+                first_image_gen = prepare_to_save_image(gen_images[0])
+                first_image_grey = prepare_to_save_image(gray_images[0])
+                first_image_rbg = prepare_to_save_image(rgb_images[0])
+                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                plt.savefig(f"generated_images/gen_image_{epoch}_{idx}.jpg")
+                plt.close()
+            print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
+            epoch_minus_1 = EPOCHS - 1
+
+            # Save the generator model after every epoch
+            torch.save(self.generator.state_dict(),
+                       os.path.join(save_dir, f'gen_model_{epoch_minus_1}.pth'))
+
+    def train_generator(self, valid, fake_pred, rgb_images, gen_images):
+        # Loss measures generator's ability to fool the discriminator
+        rgb_images = rgb_images.to(self.device)
+        gen_images = gen_images.to(self.device)
+        fake_pred_2d = fake_pred[:, :, 0, 0]
+        g_loss_pred = self.GANcriterion(fake_pred_2d, valid)
+        g_loss_rgb = self.MSEcriterion(gen_images, rgb_images)
+        g_loss = g_loss_pred + g_loss_rgb
+        g_loss.backward()
+        self.optimizer_G.step()
+
+        return g_loss
+
+    def train_discriminator(self, rgb_images, gen_images, valid, fake):
+        # Train Discriminator
+        self.optimizer_D.zero_grad()
+        # Measure discriminator's ability to classify real and fake images
+        rgb_images = rgb_images.to(self.device)
+        gen_images = gen_images.to(self.device)
+        valid = valid.to(self.device)
+        fake = fake.to(self.device)
+        real_preds = self.discriminator(rgb_images)
+        real_preds_2d = real_preds[:, :, 0, 0]
+        real_loss = self.GANcriterion(real_preds_2d, valid)
+
+        fake_preds = self.discriminator(gen_images.detach())
+        fake_preds_2d = fake_preds[:, :, 0, 0]
+        fake_loss = self.GANcriterion(fake_preds_2d, fake)
+        d_loss = 0.5 * (real_loss + fake_loss)
+
+        d_loss.backward()
+        self.optimizer_D.step()
+
+        return d_loss
+
+    def train(self):
+        # epoch_minus_1 = EPOCHS - 1
+        #
+        # self.generator.load_state_dict(torch.load(
+        #     'saved_models_ImageColoringProject/gen_model_{}.pth'.format(
+        #         epoch_minus_1)))
+        test_losses_g = []
+        val_losses_g = []
+        d_loss_per_epoch = []
+        g_loss_per_epoch = []
+        self.generator.train()
+        self.discriminator.train()
+        accuracy = []
+
+        # Training loop
+        for epoch in range(self.num_epochs):
+            g_loss_per_batch = []
+            d_loss_per_batch = []
+            psnr_values = []
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
+                # Adversarial ground truths
+                valid = torch.ones(gray_images.size(0), 1).to(self.device)
+                fake = torch.zeros(gray_images.size(0), 1).to(self.device)
+
+                # Configure input
+                gray_images = gray_images.to(self.device)
+                rgb_images = rgb_images.to(self.device)
+
+                # Generate RGB images from grayscale
+                self.optimizer_G.zero_grad()
+                gen_images = self.generator(gray_images)
+                fake_pred = self.discriminator(gen_images)
+
+                # Train Generator
+                g_loss = self.train_generator(valid, fake_pred, rgb_images, gen_images)
+                g_loss_per_batch.append(g_loss)
+                # Train Discriminator
+                d_loss = self.train_discriminator(rgb_images, gen_images, valid, fake)
+                d_loss_per_batch.append(d_loss)
+
+                # compute PSNR
+                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), d_loss.item(), g_loss.item())
+                )
+
+                # Save the generated images
+                os.makedirs("images_per_epoch", exist_ok=True)
+                first_image_gen = prepare_to_save_image(gen_images[0])
+                first_image_grey = prepare_to_save_image(gray_images[0])
+                first_image_rbg = prepare_to_save_image(rgb_images[0])
+                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                plt.savefig(f"images_per_epoch/image_epoch_{epoch}_batch_{batch_idx}.jpg")
+                plt.close()
+
+            test_loss_per_epoch = self.data_avg_loss(self.test_loader_gray, self.test_loader_rgb)
+            validation_loss_per_epoch = self.data_avg_loss(self.eval_loader_gray, self.eval_loader_rgb)
+
+            # Update losses arrays
+            g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
+            d_loss_per_epoch.append(np.average([l.item() for l in d_loss_per_batch]))
+            test_losses_g.append(test_loss_per_epoch)
+            val_losses_g.append(validation_loss_per_epoch)
+
+            # Compute PSNR
+            avg_psnr = sum(psnr_values) / len(psnr_values)
+            accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
+
+            print(
+                "[Epoch: %d/%d] [g_loss_train: %f] [d_loss_train: %f] [test_loss_per_epoch: %f] ["
+                "validation_loss_per_epoch: %f] [PSNR: %.2f dB]"
+                % (
+                    epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]),
+                    np.average([l.item() for l in d_loss_per_batch]),
+                    test_loss_per_epoch, validation_loss_per_epoch, avg_psnr
+                )
+            )
+
+        return g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy
+
+    def data_avg_loss(self, loader_gray, loader_rgb):
+        test_loss = []
+        self.generator.eval()
+        self.discriminator.eval()
+        with torch.no_grad():
+            # Test loop
+            for (gray_images, _), (rgb_images, _) in zip(loader_gray, loader_rgb, ):
+                # Adversarial ground truths
+                valid = torch.ones(gray_images.size(0), 1).to(self.device)
+                fake = torch.zeros(gray_images.size(0), 1).to(self.device)
+
+                # Configure input
+                gray_images = gray_images.to(self.device)
+                rgb_images = rgb_images.to(self.device)
+
+                # Generate RGB images from grayscale
+                gen_images = self.generator(gray_images)
+                fake_pred = self.discriminator(gen_images)
+                fake_pred_2d = fake_pred[:, :, 0, 0]
+                g_loss_pred = self.GANcriterion(fake_pred_2d, valid)
+                g_loss_rgb = self.MSEcriterion(gen_images, rgb_images)
+                g_loss = g_loss_pred + g_loss_rgb
+                test_loss.append(g_loss)
+        return sum(test_loss) / len(test_loss)
+
+    def results_visualization(self):
+        for (gray_images, _), (rgb_images, _) in zip(self.test_loader_gray, self.test_loader_rgb):
+            # Configure input
+            gray_images = gray_images.to(self.device)
+            rgb_images = rgb_images.to(self.device)
+
+            # Generate RGB images from grayscale
+            gen_images = self.generator(gray_images)
+
+            for idx, (gray_image, rgb_image, gen_image) in enumerate(zip(gray_images, rgb_images, gen_images)):
+                gray_image_np = prepare_to_save_image(gray_image)
+                gen_image_np = prepare_to_save_image(gen_image)
+                rgb_image_np = prepare_to_save_image(rgb_image)
+                plt = make_subplot(rgb_image_np, gray_image_np, gen_image_np)
+
+                plt.savefig("results/%d.jpg" % idx)
+                plt.close()

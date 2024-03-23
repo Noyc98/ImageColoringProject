@@ -1,107 +1,77 @@
-import cv2
-import numpy as np
+import pickle
+
+from matplotlib import pyplot as plt
 
 from DataLoader import data_loader
+from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
-from Gan import UNetGenerator, Discriminator
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision.utils import save_image
-import matplotlib.pyplot as plt
+BATCH_SIZE = 10
+EPOCHS = 5
 
 
-# Define a function to display images
-def show_images(images):
-    fig, axs = plt.subplots(1, len(images), figsize=(10, 5))
-    for i, img in enumerate(images):
-        img_np = img.permute(1, 2, 0).detach().cpu().numpy()
-        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
-        axs[i].imshow(img_np)
-        axs[i].axis('off')
+def plot_graph(loss, title, y_label='Loss'):
+    plt.cla()
+    plt.plot(range(len(loss)), loss, label=title)
+    plt.xlabel('Batch Steps - axis')
+    plt.ylabel(f'{y_label} Value - axis')
+    plt.title("Loss")
+
+    plt.legend()
     plt.show()
+    return
 
 
 def main():
     # pre_processing = PreProcessing()
-    # pre_processing.convert_folder_to_grayscale("flowers_color", "flowers_gray")
+    # pre_processing.convert_folder_to_grayscale("flowers_rgb_class/splited_data", "flowers_gray_class/splited_data")
     # max_width, max_height = pre_processing.find_largest_image_size("flowers_gray")
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    # Define training parameters
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    lr = 0.0002
-    batch_size = 64
-    num_epochs = 5
+    # data_loader()
+    load_path = 'saved_models_ImageColoringProject/data_loader.pkl'
+    # Load the saved DataLoader objects and datasets
+    with open(load_path, 'rb') as f:
+        loaded_data = pickle.load(f)
 
-    train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray, train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb = data_loader()
+    # Unpack the loaded data
+    train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray, train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb = loaded_data
 
-    # Initialize networks
-    generator = UNetGenerator().to(device)
-    discriminator = Discriminator().to(device)
+    print("Finished data loading!")
+    # Define and initialize your model handler
+    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
+                                 train_loader_gray,
+                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, 0.0002, 0.0002)
+    print("Finished ModelHandler!")
 
-    # Define loss function and optimizers
-    criterion_gan = nn.BCEWithLogitsLoss()
+    # Define Time
+    # start = torch.cuda.Event(enable_timing=True)
+    # end = torch.cuda.Event(enable_timing=True)
+    # print(torch.cuda.is_available())
 
-    optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
-    optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
+    # Train Model
+    # start.record()
+    # model_handler.pretrain_generator()
+    # end.record()
+    # torch.cuda.synchronize()
+    # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
+    # start.record()
+    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+    # end.record()
+    # torch.cuda.synchronize()
+    # print(f"Training time: {start.elapsed_time(end)} milliseconds")
 
-    # Training loop
-    for epoch in range(num_epochs):
-        for i, (imgs, _) in enumerate(train_loader_gray):
-            # Adversarial ground truths
-            valid = torch.ones(imgs.size(0), 1).to(device)
-            fake = torch.zeros(imgs.size(0), 1).to(device)
+    model_handler.results_visualization()
 
-            # for img in imgs:
-            # Configure input
-            real_imgs = imgs.to(device)
-
-            # -----------------
-            # Train Generator
-            # -----------------
-            optimizer_G.zero_grad()
-
-            # Generate RGB images from grayscale
-            gen_imgs = generator(real_imgs)
-            fake_pred = discriminator(gen_imgs)
-            fake_pred_2d = fake_pred[:, :, 0, 0]
-
-            # Loss measures generator's ability to fool the discriminator
-            g_loss = criterion_gan(fake_pred_2d, valid)
-
-            g_loss.backward()
-            optimizer_G.step()
-
-            # ---------------------
-            # Train Discriminator
-            # ---------------------
-            optimizer_D.zero_grad()
-
-            # Measure discriminator's ability to classify real and fake images
-            d_real_imgs = discriminator(real_imgs)
-            d_real_imgs_2d = d_real_imgs[:, :, 0, 0]
-            real_loss = criterion_gan(d_real_imgs_2d, valid)
-
-            d_gen_imgs = discriminator(gen_imgs.detach())
-            d_gen_imgs_2d = d_gen_imgs[:, :, 0, 0]
-            fake_loss = criterion_gan(d_gen_imgs_2d, fake)
-
-            d_loss = 0.5 * (real_loss + fake_loss)
-
-            d_loss.backward()
-            optimizer_D.step()
-
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                % (epoch, num_epochs, i, len(train_loader_gray), d_loss.item(), g_loss.item())
-            )
-
-            batches_done = epoch * len(train_loader_gray) + i
-            if batches_done % 100 == 0:
-                show_images(gen_imgs[:5])
-                save_image(gen_imgs.data[:25], "images/%d.jpg" % batches_done, nrow=5, normalize=True)
+    # plots
+    plot_graph(g_loss_per_epoch, "g_loss_per_epoch")
+    plot_graph(d_loss_per_epoch, "d_loss_per_epoch")
+    plot_graph(accuracy, title="PSNR accuracy per epoch", y_label="Accuracy")
+    # Convert CUDA tensors to numpy arrays
+    test_losses_g = [l.item() for l in test_losses_g]
+    val_losses_g = [l.item() for l in val_losses_g]
+    plot_graph(test_losses_g, "test_losses_g")
+    plot_graph(val_losses_g, "val_losses_g")
 
 
 if __name__ == "__main__":

@@ -1,16 +1,17 @@
-import torch
-from torchvision import transforms
-from torch.utils.data import DataLoader
-import os
+import pickle
+from torch.utils.data import Subset
 import random
 import shutil
 from torchvision.datasets import ImageFolder
+import os
+from torchvision import transforms
+from torch.utils.data import DataLoader
 
 
-def create_data_set(color_mode='gray', batch_size=64):
+def create_data_set(color_mode='gray'):
     # Define transformations
     transform = transforms.Compose([
-        transforms.Resize((64, 64)),  # Resize images to a fixed size
+        transforms.Resize((256, 256)),  # Resize images to a fixed size
         transforms.ToTensor(),  # Convert images to PyTorch tensors
         transforms.Normalize((0.5,), (0.5,))  # Normalize images
     ])
@@ -35,36 +36,40 @@ def create_data_set(color_mode='gray', batch_size=64):
     image_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
 
     # Create a list of image filenames in 'data_path'
-    imgs_list = [filename for filename in os.listdir(data_path) if os.path.splitext(filename)[-1] in image_extensions]
+    images_list = [filename for filename in os.listdir(data_path) if os.path.splitext(filename)[-1] in image_extensions]
 
     # Create destination folders if they don't exist
     for folder_path in [train_folder, val_folder, test_folder]:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-    return train_folder, val_folder, test_folder,imgs_list,data_path,dataset
+    return train_folder, val_folder, test_folder, images_list, data_path, dataset
 
 
 def data_loader():
-    train_folder_gray, val_folder_gray, test_folder_gray, imgs_list_gray, data_path_gray, dataset_gray = create_data_set(color_mode='gray', batch_size=64)
-    train_folder_rgb, val_folder_rgb, test_folder_rgb, imgs_list_rgb, data_path_rgb, dataset_rgb = create_data_set(color_mode='rgb', batch_size=64)
+    save_path = 'saved_models_ImageColoringProject/data_loader.pkl'
+    train_folder_gray, val_folder_gray, test_folder_gray, images_list_gray, data_path_gray, dataset_gray = create_data_set(
+        color_mode='gray')
+    train_folder_rgb, val_folder_rgb, test_folder_rgb, images_list_rgb, data_path_rgb, dataset_rgb = create_data_set(
+        color_mode='rgb')
+
     # Sets the random seed
     random.seed(42)
 
     # Shuffle the list of image filenames
-    random.shuffle(imgs_list_gray)
+    random.shuffle(images_list_gray)
 
     # determine the number of images for each set
-    train_size = int(len(imgs_list_gray) * 0.7)
-    val_size = int(len(imgs_list_gray) * 0.15)
-    test_size = int(len(imgs_list_gray) * 0.15)
+    train_size = int(len(images_list_gray) * 0.7)
+    val_size = int(len(images_list_gray) * 0.15)
+    test_size = int(len(images_list_gray) * 0.15)
 
     # Save index for each img
     train_idx = []
     test_idx = []
     eval_idx = []
     # Copy image files to destination folders
-    for i, f in enumerate(imgs_list_gray):
+    for i, f in enumerate(images_list_gray):
         if i < train_size:
             dest_folder = train_folder_gray
             dest_folder_rgb = train_folder_rgb
@@ -82,24 +87,25 @@ def data_loader():
 
     # Create dataSet
     # Gray
-    train_dataset_gray = torch.utils.data.Subset(dataset_gray, train_idx)
-    test_dataset_gray = torch.utils.data.Subset(dataset_gray, test_idx)
-    eval_dataset_gray = torch.utils.data.Subset(dataset_gray, eval_idx)
+    train_dataset_gray = Subset(dataset_gray, train_idx)
+    test_dataset_gray = Subset(dataset_gray, test_idx)
+    eval_dataset_gray = Subset(dataset_gray, eval_idx)
     # RGB
-    train_dataset_rgb = torch.utils.data.Subset(dataset_rgb, train_idx)
-    test_dataset_rgb = torch.utils.data.Subset(dataset_rgb, test_idx)
-    eval_dataset_rgb = torch.utils.data.Subset(dataset_rgb, eval_idx)
+    train_dataset_rgb = Subset(dataset_rgb, train_idx)
+    test_dataset_rgb = Subset(dataset_rgb, test_idx)
+    eval_dataset_rgb = Subset(dataset_rgb, eval_idx)
 
     # Create data loaders
-    train_loader_gray = DataLoader(train_dataset_gray, batch_size=32, shuffle=True)
+    train_loader_gray = DataLoader(train_dataset_gray, batch_size=32)
     eval_loader_gray = DataLoader(eval_dataset_gray, batch_size=32)
     test_loader_gray = DataLoader(test_dataset_gray, batch_size=32)
-    train_loader_rgb = DataLoader(train_dataset_rgb, batch_size=32, shuffle=True)
+    train_loader_rgb = DataLoader(train_dataset_rgb, batch_size=32)
     eval_loader_rgb = DataLoader(eval_dataset_rgb, batch_size=32)
     test_loader_rgb = DataLoader(test_dataset_rgb, batch_size=32)
 
-    return (train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray,
-            train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb)
-
-
-
+    data = (
+        train_dataset_gray, eval_loader_gray, test_dataset_gray, train_loader_gray, eval_loader_gray, test_loader_gray,
+        train_dataset_rgb, test_dataset_rgb, eval_dataset_rgb, train_loader_rgb, eval_loader_rgb, test_loader_rgb)
+    if save_path:
+        with open(save_path, 'wb') as f:
+            pickle.dump(data, f)
