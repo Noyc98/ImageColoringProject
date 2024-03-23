@@ -8,16 +8,18 @@ from PreProcessingHandler import PreProcessing
 BATCH_SIZE = 10
 EPOCHS = 5
 
-def plot_graph_loss(loss, title):
+
+def plot_graph(loss, title, y_label='Loss'):
     plt.cla()
     plt.plot(range(len(loss)), loss, label=title)
     plt.xlabel('Batch Steps - axis')
-    plt.ylabel('Loss Value - axis')
+    plt.ylabel(f'{y_label} Value - axis')
     plt.title("Loss")
 
     plt.legend()
     plt.show()
     return
+
 
 def main():
     # pre_processing = PreProcessing()
@@ -26,8 +28,8 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    data = data_loader()
-    load_path = 'saved_models_ImageColoringProject/preTrain/data_loader.pkl'
+    # data_loader()
+    load_path = 'saved_models_ImageColoringProject/data_loader.pkl'
     # Load the saved DataLoader objects and datasets
     with open(load_path, 'rb') as f:
         loaded_data = pickle.load(f)
@@ -54,7 +56,7 @@ def main():
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
     # start.record()
-    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g = model_handler.train()
+    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
@@ -62,14 +64,14 @@ def main():
     model_handler.results_visualization()
 
     # plots
-    plot_graph_loss(g_loss_per_epoch, "g_loss_per_epoch")
-    plot_graph_loss(d_loss_per_epoch, "d_loss_per_epoch")
-
+    plot_graph(g_loss_per_epoch, "g_loss_per_epoch")
+    plot_graph(d_loss_per_epoch, "d_loss_per_epoch")
+    plot_graph(accuracy, title="PSNR accuracy per epoch", y_label="Accuracy")
     # Convert CUDA tensors to numpy arrays
     test_losses_g = [l.item() for l in test_losses_g]
     val_losses_g = [l.item() for l in val_losses_g]
-    plot_graph_loss(test_losses_g, "test_losses_g")
-    plot_graph_loss(val_losses_g, "val_losses_g")
+    plot_graph(test_losses_g, "test_losses_g")
+    plot_graph(val_losses_g, "val_losses_g")
 
 
 if __name__ == "__main__":
