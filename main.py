@@ -9,10 +9,10 @@ BATCH_SIZE = 10
 EPOCHS = 5
 
 
-def plot_graph(loss, title, y_label='Loss'):
+def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
     plt.cla()
     plt.plot(range(len(loss)), loss, label=title)
-    plt.xlabel('Batch Steps - axis')
+    plt.xlabel(f'{x_label} Steps - axis')
     plt.ylabel(f'{y_label} Value - axis')
     plt.title("Loss")
 
@@ -29,7 +29,7 @@ def main():
     # pre_processing.resize_images("flowers_gray", target_size)
 
     # data_loader()
-    load_path = 'saved_models_ImageColoringProject/data_loader.pkl'
+    load_path = 'saved_models/data_loader.pkl'
     # Load the saved DataLoader objects and datasets
     with open(load_path, 'rb') as f:
         loaded_data = pickle.load(f)
