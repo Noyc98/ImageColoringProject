@@ -47,7 +47,7 @@ def create_data_set(color_mode='gray'):
 
 
 def data_loader():
-    save_path = 'saved_models_ImageColoringProject/data_loader.pkl'
+    save_path = 'saved_models/data_loader.pkl'
     train_folder_gray, val_folder_gray, test_folder_gray, images_list_gray, data_path_gray, dataset_gray = create_data_set(
         color_mode='gray')
     train_folder_rgb, val_folder_rgb, test_folder_rgb, images_list_rgb, data_path_rgb, dataset_rgb = create_data_set(

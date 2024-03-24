@@ -9,7 +9,7 @@ from PIL import Image
 from Gan import UNetGenerator, Discriminator
 
 BATCH_SIZE = 10
-EPOCHS = 5
+EPOCHS = 10
 
 
 def prepare_to_save_image(image):
@@ -80,11 +80,17 @@ class ModelHandler:
         self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
 
     def pretrain_generator(self):
-        save_dir = 'saved_models_ImageColoringProject'
-        os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
+        if os.path.exists('saved_models/pretrained_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
 
+        save_dir = 'saved_models'
+        os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
+        accuracy = []
+        g_loss_per_epoch = []
         for epoch in range(self.num_epochs_pre):
-            for idx, ((gray_images, _), (rgb_images, _)) in enumerate(
+            psnr_values = []
+            g_loss_per_batch = []
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
                     zip(self.train_loader_gray, self.train_loader_rgb)):
                 # Configure input
                 gray_images = gray_images.to(self.device)
@@ -102,16 +108,35 @@ class ModelHandler:
                 first_image_grey = prepare_to_save_image(gray_images[0])
                 first_image_rbg = prepare_to_save_image(rgb_images[0])
                 plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                plt.savefig(f"generated_images/gen_image_{epoch}_{idx}.jpg")
+                plt.savefig(f"generated_images/gen_image_{epoch}_{batch_idx}.jpg")
                 plt.close()
-            print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
+                g_loss_per_batch.append(loss)
+                # compute PSNR
+                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [G loss: %f]"
+                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss.item())
+                )
+
+            # Compute PSNR
+            avg_psnr = sum(psnr_values) / len(psnr_values)
+            accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
+            g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
+
+            print(
+                "[Epoch: %d/%d] [g_loss_train: %f] [PSNR: %.2f dB]"
+                % (
+                    epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]), avg_psnr
+                )
+            )
+            # print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
             epoch_minus_1 = EPOCHS - 1
 
             # Save the generator model after every epoch
-            torch.save(self.generator.state_dict(),
-                       os.path.join(save_dir, f'gen_model_{epoch_minus_1}.pth'))
+            torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
 
     def train_generator(self, valid, fake_pred, rgb_images, gen_images):
+        self.optimizer_G.zero_grad()
         # Loss measures generator's ability to fool the discriminator
         rgb_images = rgb_images.to(self.device)
         gen_images = gen_images.to(self.device)
@@ -127,11 +152,14 @@ class ModelHandler:
     def train_discriminator(self, rgb_images, gen_images, valid, fake):
         # Train Discriminator
         self.optimizer_D.zero_grad()
-        # Measure discriminator's ability to classify real and fake images
+
+        # to device (cuda)
         rgb_images = rgb_images.to(self.device)
         gen_images = gen_images.to(self.device)
         valid = valid.to(self.device)
         fake = fake.to(self.device)
+
+        # Measure discriminator's ability to classify real and fake images
         real_preds = self.discriminator(rgb_images)
         real_preds_2d = real_preds[:, :, 0, 0]
         real_loss = self.GANcriterion(real_preds_2d, valid)
@@ -147,11 +175,15 @@ class ModelHandler:
         return d_loss
 
     def train(self):
-        # epoch_minus_1 = EPOCHS - 1
-        #
-        # self.generator.load_state_dict(torch.load(
-        #     'saved_models_ImageColoringProject/gen_model_{}.pth'.format(
-        #         epoch_minus_1)))
+        if os.path.exists('saved_models/generator_model.pth') and os.path.exists('saved_models/discriminator_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/generator_model.pth'))
+            self.discriminator.load_state_dict(torch.load('saved_models/discriminator_model.pth'))
+            print("Finished loading the previous trained models!")
+
+        elif os.path.exists('saved_models/pretrained_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
+            print("Finished loading the pretrained generator!")
+
         test_losses_g = []
         val_losses_g = []
         d_loss_per_epoch = []
@@ -175,7 +207,6 @@ class ModelHandler:
                 rgb_images = rgb_images.to(self.device)
 
                 # Generate RGB images from grayscale
-                self.optimizer_G.zero_grad()
                 gen_images = self.generator(gray_images)
                 fake_pred = self.discriminator(gen_images)
 
@@ -225,6 +256,9 @@ class ModelHandler:
                     test_loss_per_epoch, validation_loss_per_epoch, avg_psnr
                 )
             )
+            # Save the generator model after every epoch
+            torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
+            torch.save(self.discriminator.state_dict(), 'saved_models/discriminator_model.pth')
 
         return g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy
 

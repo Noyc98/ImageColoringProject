@@ -29,7 +29,7 @@ def main():
     # pre_processing.resize_images("flowers_gray", target_size)
 
     # data_loader()
-    load_path = 'saved_models_ImageColoringProject/data_loader.pkl'
+    load_path = 'saved_models/data_loader.pkl'
     # Load the saved DataLoader objects and datasets
     with open(load_path, 'rb') as f:
         loaded_data = pickle.load(f)
