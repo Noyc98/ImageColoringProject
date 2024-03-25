@@ -71,19 +71,19 @@ def data_loader():
     # Copy image files to destination folders
     for i, f in enumerate(images_list_gray):
         if i < train_size:
-            dest_folder = train_folder_gray
-            dest_folder_rgb = train_folder_rgb
+            # dest_folder = train_folder_gray
+            # dest_folder_rgb = train_folder_rgb
             train_idx.append(i)
         elif i < train_size + val_size:
-            dest_folder = val_folder_gray
-            dest_folder_rgb = val_folder_rgb
+            # dest_folder = val_folder_gray
+            # dest_folder_rgb = val_folder_rgb
             eval_idx.append(i)
         else:
-            dest_folder = test_folder_gray
-            dest_folder_rgb = test_folder_rgb
+            # dest_folder = test_folder_gray
+            # dest_folder_rgb = test_folder_rgb
             test_idx.append(i)
-        shutil.copy(os.path.join(data_path_gray, f), os.path.join(dest_folder, f))
-        shutil.copy(os.path.join(data_path_rgb, f), os.path.join(dest_folder_rgb, f))
+        # shutil.copy(os.path.join(data_path_gray, f), os.path.join(dest_folder, f))
+        # shutil.copy(os.path.join(data_path_rgb, f), os.path.join(dest_folder_rgb, f))
 
     # Create dataSet
     # Gray
