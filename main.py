@@ -1,12 +1,12 @@
 import pickle
-
 from matplotlib import pyplot as plt
-
 from DataLoader import data_loader
 from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
-BATCH_SIZE = 10
-EPOCHS = 5
+
+BATCH_SIZE  = 10
+EPOCHS      = 10
+LR          = 0.0001
 
 
 def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
