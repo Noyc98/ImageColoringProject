@@ -251,8 +251,8 @@ class ModelHandler:
                 "[Epoch: %d/%d] [g_loss_train: %f] [d_loss_train: %f] [test_loss_per_epoch: %f] ["
                 "validation_loss_per_epoch: %f] [PSNR: %.2f dB]"
                 % (
-                    epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]),
-                    np.average([l.item() for l in d_loss_per_batch]),
+                    epoch, self.num_epochs, g_loss_per_epoch[-1],
+                    d_loss_per_epoch[-1],
                     test_loss_per_epoch, validation_loss_per_epoch, avg_psnr
                 )
             )

@@ -41,7 +41,7 @@ def main():
     # Define and initialize your model handler
     model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
                                  train_loader_gray,
-                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, 0.0002, 0.0002)
+                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, LR, LR)
     print("Finished ModelHandler!")
 
     # Define Time
