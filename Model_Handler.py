@@ -8,9 +8,9 @@ from torch import nn, optim
 from PIL import Image
 from Gan import UNetGenerator, Discriminator
 
-BATCH_SIZE = 10
-EPOCHS = 10
-
+BATCH_SIZE  = 10
+EPOCHS      = 10
+LR          = 0.0001
 
 def prepare_to_save_image(image):
     image_np = image.permute(1, 2, 0).detach().cpu().numpy()
@@ -57,7 +57,7 @@ def compute_psnr(loader_gray, loader_rgb, model_handler):
 class ModelHandler:
     def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray,
                  eval_loader_gray,
-                 test_loader_gray, batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=0.0002, lr_D=0.0002,
+                 test_loader_gray, batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR,
                  num_epochs_pre=EPOCHS):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_epochs = num_epochs
