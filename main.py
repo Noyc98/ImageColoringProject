@@ -4,9 +4,9 @@ from DataLoader import data_loader
 from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
 
-BATCH_SIZE  = 10
-EPOCHS      = 10
-LR          = 0.0001
+BATCH_SIZE  = 32
+EPOCHS      = 20
+LR          = 0.00005
 
 
 def plot_graph(loss, title, x_label='Batch', y_label='Loss'):

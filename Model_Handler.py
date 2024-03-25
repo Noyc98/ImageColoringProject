@@ -8,9 +8,9 @@ from torch import nn, optim
 from PIL import Image
 from Gan import UNetGenerator, Discriminator
 
-BATCH_SIZE  = 10
-EPOCHS      = 10
-LR          = 0.0001
+BATCH_SIZE  = 32
+EPOCHS      = 20
+LR          = 0.00005
 
 def prepare_to_save_image(image):
     image_np = image.permute(1, 2, 0).detach().cpu().numpy()
