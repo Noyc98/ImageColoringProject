@@ -28,7 +28,7 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    # data_loader()
+    data_loader()
     load_path = 'saved_models/data_loader.pkl'
     # Load the saved DataLoader objects and datasets
     with open(load_path, 'rb') as f:
@@ -56,7 +56,10 @@ def main():
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
     # start.record()
-    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+    #g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+
+    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train_wgan()
+
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
