@@ -82,7 +82,9 @@ class ModelHandler:
     def pretrain_generator(self):
         if os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
-
+            print('continue pretraining!')
+        else:
+            print('starting to pretrain the genarator:')
         save_dir = 'saved_models'
         os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
         accuracy = []
@@ -126,7 +128,7 @@ class ModelHandler:
             print(
                 "[Epoch: %d/%d] [g_loss_train: %f] [PSNR: %.2f dB]"
                 % (
-                    epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]), avg_psnr
+                    epoch, self.num_epochs, g_loss_per_epoch[-1], avg_psnr
                 )
             )
             # print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
