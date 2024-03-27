@@ -9,10 +9,10 @@ from Gan import UNetGenerator, Discriminator
 import Wgan
 import numpy as np
 
-
+D_ITERATION = 4
 BATCH_SIZE  = 32
 EPOCHS      = 20
-LR          = 0.00005
+LR          = 0.0001
 
 def prepare_to_save_image(image):
     image_np = image.permute(1, 2, 0).detach().cpu().numpy()
@@ -58,9 +58,8 @@ def compute_psnr(loader_gray, loader_rgb, model_handler):
 
 class ModelHandler:
     def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray,
-                 eval_loader_gray,
-                 test_loader_gray, batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR,
-                 num_epochs_pre=EPOCHS):
+                 eval_loader_gray, test_loader_gray,
+                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR, num_epochs_pre=EPOCHS, discriminator_iterations=D_ITERATION):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_epochs = num_epochs
         self.num_epochs_pre = num_epochs_pre
@@ -79,7 +78,7 @@ class ModelHandler:
         #GAN
         # self.generator = UNetGenerator().to(self.device)
         # self.discriminator = Discriminator().to(self.device)
-        self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
+        # self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
         self.MSEcriterion = nn.MSELoss()
         # self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
         # self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
@@ -87,9 +86,9 @@ class ModelHandler:
         #WGAN
         self.generator = Wgan.UNetGenerator()
         self.discriminator = Wgan.Discriminator()
-        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=0.0001, betas=(0.5, 0.999))
-        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
-        self.discriminator_iter = 4
+        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
+        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
+        self.discriminator_iterations = discriminator_iterations
 
 
     def pretrain_generator(self):
@@ -377,7 +376,7 @@ class ModelHandler:
                 rgb_images = rgb_images.to(self.device)
 
                 if count_train_batchs == 0:
-                    count_train_batchs = self.discriminator_iter
+                    count_train_batchs = self.discriminator_iterations
 
                 # --- Train discriminator ---
                 if count_train_batchs > 0:

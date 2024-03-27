@@ -4,9 +4,10 @@ from DataLoader import data_loader
 from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
 
+D_ITERATION = 4
 BATCH_SIZE  = 32
 EPOCHS      = 20
-LR          = 0.00005
+LR          = 0.0001
 
 
 def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
@@ -39,9 +40,8 @@ def main():
 
     print("Finished data loading!")
     # Define and initialize your model handler
-    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
-                                 train_loader_gray,
-                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, LR, LR)
+    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray, eval_loader_gray, test_loader_gray,
+                                 BATCH_SIZE, EPOCHS, LR, LR, D_ITERATION)
     print("Finished ModelHandler!")
 
     # Define Time
