@@ -87,8 +87,8 @@ class ModelHandler:
         #WGAN
         self.generator = Wgan.UNetGenerator()
         self.discriminator = Wgan.Discriminator()
-        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=0.0001, betas=(0.5, 0.999))
+        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
         self.discriminator_iter = 4
 
 

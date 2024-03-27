@@ -78,6 +78,12 @@ class UNetGenerator(nn.Module):
         d2 = self.d2(b, s3)
         d3 = self.d3(d2, s2)
         d4 = self.d4(d3, s1)
+
+        # # d1 = self.d1(b, s4)
+        # d2 = self.d2(b, s3)
+        # d3 = self.d3(d2, s2)
+        # d4 = self.d4(d3, s1)
+
         """ Classifier """
         outputs = self.outputs(d4)
         return outputs
