@@ -342,6 +342,7 @@ class ModelHandler:
 
         d_loss = real_loss - fake_loss
         d_loss.backward()
+        self.optimizer_D.step()
 
         return d_loss
 
@@ -370,50 +371,64 @@ class ModelHandler:
             d_loss_per_batch = []
             psnr_values = []
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
+
+                # Print Epoch info
+                print("[Epoch %d/%d] [Batch %d/%d] " %
+                      (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray)))
+
                 # Configure input
                 gray_images = gray_images.to(self.device)
                 rgb_images = rgb_images.to(self.device)
 
-                # Unfreeze discriminator weights
-                for param in self.discriminator.parameters():
-                    param.requires_grad = True
-
-                # Generate rgb images for discriminator training
-                gen_images = self.generator(gray_images)
+                if count_train_batchs == 0:
+                    count_train_batchs = self.discriminator_iter
 
                 # Train discriminator
-                for d_iter in range(self.discriminator_iter):
+                if count_train_batchs > 0:
+
+                    # Generate rgb images for discriminator training
+                    gen_images = self.generator(gray_images)
+
+                    # Unfreeze discriminator weights
+                    for param in self.discriminator.parameters():
+                        param.requires_grad = True
+
+                    # Train discriminator
                     d_loss = self.train_discriminator_wgan(rgb_images, gen_images)
-                self.optimizer_D.step()
+                    count_train_batchs -= 1
 
-                # Save discriminator loss per batch
-                d_loss_per_batch.append(d_loss.item())
+                # After 4 batch that the discriminator has train - generator will train
+                if count_train_batchs == 0:
 
-                # Freeze discriminator weights during generator training
-                for param in self.discriminator.parameters():
-                    param.requires_grad = False
+                    # Freeze discriminator weights during generator training
+                    for param in self.discriminator.parameters():
+                        param.requires_grad = False
 
-                # Generate RGB images from grayscale
-                gen_images = self.generator(gray_images)
-                fake_pred = self.discriminator(gen_images)
-                # Train generator
-                g_loss = self.train_generator_wgan(fake_pred)
+                    # Generate RGB images from grayscale
+                    gen_images = self.generator(gray_images)
+                    fake_pred = self.discriminator(gen_images)
+                    # Train generator
+                    g_loss = self.train_generator_wgan(fake_pred)
 
-                # Print info
-                print("[Epoch %d/%d] [Batch %d/%d] [G loss: %f] [D loss: %f]" %
-                      (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), g_loss.item(), d_loss.item()))
+                    # Save discriminator and generator loss per batch
+                    g_loss_per_batch.append(g_loss.item())
+                    d_loss_per_batch.append(d_loss.item())
 
-                # compute PSNR
-                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+                    # Print info
+                    print("[Epoch %d/%d] [Batch %d/%d] [G loss: %f] [D loss: %f]" %
+                          (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), g_loss.item(), d_loss.item()))
 
-                # Save the generated images
-                os.makedirs("images_per_epoch", exist_ok=True)
-                first_image_gen = prepare_to_save_image(gen_images[0])
-                first_image_grey = prepare_to_save_image(gray_images[0])
-                first_image_rbg = prepare_to_save_image(rgb_images[0])
-                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                plt.savefig(f"images_per_epoch/image_epoch_{epoch}_batch_{batch_idx}.jpg")
-                plt.close()
+                    # compute PSNR
+                    psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+
+                    # Save the generated images
+                    os.makedirs("images_per_epoch", exist_ok=True)
+                    first_image_gen = prepare_to_save_image(gen_images[0])
+                    first_image_grey = prepare_to_save_image(gray_images[0])
+                    first_image_rbg = prepare_to_save_image(rgb_images[0])
+                    plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                    plt.savefig(f"images_per_epoch/image_epoch_{epoch}_batch_{batch_idx}.jpg")
+                    plt.close()
 
             # Calc test and validation loss
             test_loss_per_epoch = self.data_avg_loss(self.test_loader_gray, self.test_loader_rgb)
