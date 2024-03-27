@@ -321,7 +321,7 @@ class ModelHandler:
     def train_generator_wgan(self, fake_pred):
 
         self.optimizer_G.zero_grad()
-        g_loss = -fake_pred.mean()
+        g_loss = -(fake_pred.mean())
         g_loss.backward()
         self.optimizer_G.step()
 
@@ -336,11 +336,11 @@ class ModelHandler:
         # Train Discriminator
         self.optimizer_D.zero_grad()
         real_preds = self.discriminator(rgb_images)
-        real_loss = real_preds.mean()
+        real_loss = -(real_preds.mean())
         fake_preds = self.discriminator(gen_images.detach())
         fake_loss = fake_preds.mean()
 
-        d_loss = real_loss - fake_loss
+        d_loss = real_loss + fake_loss
         d_loss.backward()
         self.optimizer_D.step()
 
@@ -372,20 +372,15 @@ class ModelHandler:
             psnr_values = []
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
 
-                # Print Epoch info
-                print("[Epoch %d/%d] [Batch %d/%d] " %
-                      (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray)))
-
-                # Configure input
+                # --- Configure input ---
                 gray_images = gray_images.to(self.device)
                 rgb_images = rgb_images.to(self.device)
 
                 if count_train_batchs == 0:
                     count_train_batchs = self.discriminator_iter
 
-                # Train discriminator
+                # --- Train discriminator ---
                 if count_train_batchs > 0:
-
                     # Generate rgb images for discriminator training
                     gen_images = self.generator(gray_images)
 
@@ -397,9 +392,8 @@ class ModelHandler:
                     d_loss = self.train_discriminator_wgan(rgb_images, gen_images)
                     count_train_batchs -= 1
 
-                # After 4 batch that the discriminator has train - generator will train
+                # --- After 4 batch that the discriminator has train - generator will train  ---
                 if count_train_batchs == 0:
-
                     # Freeze discriminator weights during generator training
                     for param in self.discriminator.parameters():
                         param.requires_grad = False
@@ -430,11 +424,16 @@ class ModelHandler:
                     plt.savefig(f"images_per_epoch/image_epoch_{epoch}_batch_{batch_idx}.jpg")
                     plt.close()
 
-            # Calc test and validation loss
+                else:
+                    # Print Epoch info
+                    print("[Epoch %d/%d] [Batch %d/%d] " %
+                          (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray)))
+
+            # --- Calc test and validation loss ---
             test_loss_per_epoch = self.data_avg_loss(self.test_loader_gray, self.test_loader_rgb)
             validation_loss_per_epoch = self.data_avg_loss(self.eval_loader_gray, self.eval_loader_rgb)
 
-            # Update losses arrays
+            # ---  Update losses arrays ---
             g_loss_per_epoch.append(sum(g_loss_per_batch) / len(g_loss_per_batch))
             d_loss_per_epoch.append(sum(d_loss_per_batch) / len(d_loss_per_batch))
             test_losses_g.append(test_loss_per_epoch)
