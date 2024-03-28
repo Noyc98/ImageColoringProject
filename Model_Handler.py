@@ -57,8 +57,7 @@ def compute_psnr(loader_gray, loader_rgb, model_handler):
 
 
 class ModelHandler:
-    def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray,
-                 eval_loader_gray, test_loader_gray,
+    def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray, eval_loader_gray, test_loader_gray,
                  batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR, num_epochs_pre=EPOCHS, discriminator_iterations=D_ITERATION):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_epochs = num_epochs
@@ -78,7 +77,7 @@ class ModelHandler:
         #GAN
         # self.generator = UNetGenerator().to(self.device)
         # self.discriminator = Discriminator().to(self.device)
-        # self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
+        self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
         self.MSEcriterion = nn.MSELoss()
         # self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
         # self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
@@ -438,10 +437,10 @@ class ModelHandler:
             test_losses_g.append(test_loss_per_epoch)
             val_losses_g.append(validation_loss_per_epoch)
 
-            # Compute PSNR
+            # --- Compute PSNR ---
             accuracy.append(sum(psnr_values) / len(psnr_values))  # Append the average PSNR value to the accuracy list
 
-            # Print Epoch info
+            # --- Print Epoch info ---
             print(
                 "[Epoch: %d/%d] [g_loss_train: %f] [d_loss_train: %f] [test_loss_per_epoch: %f] ["
                 "validation_loss_per_epoch: %f] [PSNR: %.2f dB]"
@@ -452,7 +451,7 @@ class ModelHandler:
                 )
             )
 
-            # Save the generator model after every epoch
+            # --- Save the generator model after every epoch ---
             torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
             torch.save(self.discriminator.state_dict(), 'saved_models/discriminator_model.pth')
 

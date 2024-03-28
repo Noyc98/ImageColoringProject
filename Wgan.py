@@ -3,6 +3,17 @@ import torch.nn as nn
 
 
 # Define VGG block
+def vgg_block(in_channels, out_channels):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        nn.InstanceNorm2d(out_channels),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+        nn.InstanceNorm2d(out_channels),
+        nn.ReLU(inplace=True)
+    )
+
+
 class conv_block(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
@@ -38,7 +49,6 @@ class decoder_block(nn.Module):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
         self.conv = conv_block(out_c+out_c, out_c)
-        self.relu = nn.ReLU(inplace=True)
     def forward(self, inputs, skip):
         x = self.up(inputs)
         x = torch.cat([x, skip], axis=1)
@@ -51,15 +61,15 @@ class UNetGenerator(nn.Module):
         super().__init__()
         """ Encoder """
         self.e1 = encoder_block(3, 64)
-        self.e2 = encoder_block(64, 128)
-        self.e3 = encoder_block(128, 256)
-        self.e4 = encoder_block(256, 512)
+        # self.e2 = encoder_block(64, 128)
+        # self.e3 = encoder_block(128, 256)
+        # self.e4 = encoder_block(256, 512)
         """ Bottleneck """
-        self.b = conv_block(256, 512)
+        self.b = conv_block(64, 128)
         """ Decoder """
-        self.d1 = decoder_block(1024, 512)
-        self.d2 = decoder_block(512, 256)
-        self.d3 = decoder_block(256, 128)
+        # self.d1 = decoder_block(1024, 512)
+        # self.d2 = decoder_block(512, 256)
+        # self.d3 = decoder_block(256, 128)
         self.d4 = decoder_block(128, 64)
         """ Classifier """
         self.outputs = nn.Conv2d(64, 3, kernel_size=1, padding=0)
@@ -67,27 +77,20 @@ class UNetGenerator(nn.Module):
     def forward(self, inputs):
         """ Encoder """
         s1, p1 = self.e1(inputs)
-        s2, p2 = self.e2(p1)
-        s3, p3 = self.e3(p2)
+        # s2, p2 = self.e2(p1)
+        # s3, p3 = self.e3(p2)
         # s4, p4 = self.e4(p3)
         """ Bottleneck """
-        b = self.b(p3)
+        b = self.b(p1)
 
         """ Decoder """
         # d1 = self.d1(b, s4)
-        d2 = self.d2(b, s3)
-        d3 = self.d3(d2, s2)
-        d4 = self.d4(d3, s1)
-
-        # # d1 = self.d1(b, s4)
         # d2 = self.d2(b, s3)
-        # d3 = self.d3(d2, s2)
-        # d4 = self.d4(d3, s1)
-
+        # d3 = self.d3(b, s2)
+        d4 = self.d4(b, s1)
         """ Classifier """
         outputs = self.outputs(d4)
         return outputs
-
 
 class Discriminator(nn.Module):
     def __init__(self):
@@ -123,7 +126,6 @@ class Discriminator(nn.Module):
         x = self.conv4(x)
         x = self.conv5(x)
         return x
-
 # Define Wasserstein loss function
 def wasserstein_loss(y_true, y_pred):
     return torch.mean(y_true * y_pred)
