@@ -1,16 +1,15 @@
-
-from torchvision.utils import save_image
 import os
-import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from torch import nn, optim
-from PIL import Image
+from torch import nn, optim, autograd
 from Gan import UNetGenerator, Discriminator
+import numpy as np
 
-BATCH_SIZE  = 10
-EPOCHS      = 10
+D_ITERATION = 4
+BATCH_SIZE  = 32
+EPOCHS      = 20
 LR          = 0.0001
+
 
 def prepare_to_save_image(image):
     image_np = image.permute(1, 2, 0).detach().cpu().numpy()
@@ -32,6 +31,7 @@ def make_subplot(rbg_image, grey_image, gen_image):
 
     plt.tight_layout()
     return plt
+
 
 def psnr(input_image, target_image):
     """
@@ -55,10 +55,8 @@ def compute_psnr(loader_gray, loader_rgb, model_handler):
 
 
 class ModelHandler:
-    def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray,
-                 eval_loader_gray,
-                 test_loader_gray, batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR,
-                 num_epochs_pre=EPOCHS):
+    def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray, eval_loader_gray, test_loader_gray,
+                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR, num_epochs_pre=EPOCHS):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_epochs = num_epochs
         self.num_epochs_pre = num_epochs_pre
@@ -72,19 +70,18 @@ class ModelHandler:
         self.eval_loader_gray = eval_loader_gray
         self.test_loader_gray = test_loader_gray
         self.test_dataset_gray = test_dataset_gray
-        self.GANcriterion = nn.BCEWithLogitsLoss().to(self.device)
         self.MSEcriterion = nn.MSELoss()
-        self.generator = UNetGenerator().to(self.device)
-        self.discriminator = Discriminator().to(self.device)
+
+        #WGAN
+        self.generator = UNetGenerator()
+        self.discriminator = Discriminator()
         self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
         self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
 
     def pretrain_generator(self):
         if os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
-            print('continue pretraining!')
-        else:
-            print('starting to pretrain the genarator:')
+
         save_dir = 'saved_models'
         os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
         accuracy = []
@@ -128,7 +125,7 @@ class ModelHandler:
             print(
                 "[Epoch: %d/%d] [g_loss_train: %f] [PSNR: %.2f dB]"
                 % (
-                    epoch, self.num_epochs, g_loss_per_epoch[-1], avg_psnr
+                    epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]), avg_psnr
                 )
             )
             # print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
@@ -137,157 +134,32 @@ class ModelHandler:
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
 
-    def train_generator(self, valid, fake_pred, rgb_images, gen_images):
-        self.optimizer_G.zero_grad()
-        # Loss measures generator's ability to fool the discriminator
-        rgb_images = rgb_images.to(self.device)
-        gen_images = gen_images.to(self.device)
-        fake_pred_2d = fake_pred[:, :, 0, 0]
-        g_loss_pred = self.GANcriterion(fake_pred_2d, valid)
-        g_loss_rgb = self.MSEcriterion(gen_images, rgb_images)
-        g_loss = g_loss_pred + g_loss_rgb
-        g_loss.backward()
-        self.optimizer_G.step()
 
-        return g_loss
-
-    def train_discriminator(self, rgb_images, gen_images, valid, fake):
-        # Train Discriminator
-        self.optimizer_D.zero_grad()
-
-        # to device (cuda)
-        rgb_images = rgb_images.to(self.device)
-        gen_images = gen_images.to(self.device)
-        valid = valid.to(self.device)
-        fake = fake.to(self.device)
-
-        # Measure discriminator's ability to classify real and fake images
-        real_preds = self.discriminator(rgb_images)
-        real_preds_2d = real_preds[:, :, 0, 0]
-        real_loss = self.GANcriterion(real_preds_2d, valid)
-
-        fake_preds = self.discriminator(gen_images.detach())
-        fake_preds_2d = fake_preds[:, :, 0, 0]
-        fake_loss = self.GANcriterion(fake_preds_2d, fake)
-        d_loss = 0.5 * (real_loss + fake_loss)
-
-        d_loss.backward()
-        self.optimizer_D.step()
-
-        return d_loss
-
-    def train(self):
-        if os.path.exists('saved_models/generator_model.pth') and os.path.exists('saved_models/discriminator_model.pth'):
-            self.generator.load_state_dict(torch.load('saved_models/generator_model.pth'))
-            self.discriminator.load_state_dict(torch.load('saved_models/discriminator_model.pth'))
-            print("Finished loading the previous trained models!")
-
-        elif os.path.exists('saved_models/pretrained_model.pth'):
-            self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
-            print("Finished loading the pretrained generator!")
-
-        test_losses_g = []
-        val_losses_g = []
-        d_loss_per_epoch = []
-        g_loss_per_epoch = []
-        self.generator.train()
-        self.discriminator.train()
-        accuracy = []
-
-        # Training loop
-        for epoch in range(self.num_epochs):
-            g_loss_per_batch = []
-            d_loss_per_batch = []
-            psnr_values = []
-            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
-                # Adversarial ground truths
-                valid = torch.ones(gray_images.size(0), 1).to(self.device)
-                fake = torch.zeros(gray_images.size(0), 1).to(self.device)
-
-                # Configure input
-                gray_images = gray_images.to(self.device)
-                rgb_images = rgb_images.to(self.device)
-
-                # Generate RGB images from grayscale
-                gen_images = self.generator(gray_images)
-                fake_pred = self.discriminator(gen_images)
-
-                # Train Generator
-                g_loss = self.train_generator(valid, fake_pred, rgb_images, gen_images)
-                g_loss_per_batch.append(g_loss)
-                # Train Discriminator
-                d_loss = self.train_discriminator(rgb_images, gen_images, valid, fake)
-                d_loss_per_batch.append(d_loss)
-
-                # compute PSNR
-                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
-
-                print(
-                    "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), d_loss.item(), g_loss.item())
-                )
-
-                # Save the generated images
-                os.makedirs("images_per_epoch", exist_ok=True)
-                first_image_gen = prepare_to_save_image(gen_images[0])
-                first_image_grey = prepare_to_save_image(gray_images[0])
-                first_image_rbg = prepare_to_save_image(rgb_images[0])
-                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                plt.savefig(f"images_per_epoch/image_epoch_{epoch}_batch_{batch_idx}.jpg")
-                plt.close()
-
-            test_loss_per_epoch = self.data_avg_loss(self.test_loader_gray, self.test_loader_rgb)
-            validation_loss_per_epoch = self.data_avg_loss(self.eval_loader_gray, self.eval_loader_rgb)
-
-            # Update losses arrays
-            g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
-            d_loss_per_epoch.append(np.average([l.item() for l in d_loss_per_batch]))
-            test_losses_g.append(test_loss_per_epoch)
-            val_losses_g.append(validation_loss_per_epoch)
-
-            # Compute PSNR
-            avg_psnr = sum(psnr_values) / len(psnr_values)
-            accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
-
-            print(
-                "[Epoch: %d/%d] [g_loss_train: %f] [d_loss_train: %f] [test_loss_per_epoch: %f] ["
-                "validation_loss_per_epoch: %f] [PSNR: %.2f dB]"
-                % (
-                    epoch, self.num_epochs, g_loss_per_epoch[-1],
-                    d_loss_per_epoch[-1],
-                    test_loss_per_epoch, validation_loss_per_epoch, avg_psnr
-                )
-            )
-            # Save the generator model after every epoch
-            torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
-            torch.save(self.discriminator.state_dict(), 'saved_models/discriminator_model.pth')
-
-        return g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy
-
-    def data_avg_loss(self, loader_gray, loader_rgb):
-        test_loss = []
+    def test_model(self, loader_gray, loader_rgb):
+        # Set model to eval mode (optional)
         self.generator.eval()
         self.discriminator.eval()
-        with torch.no_grad():
-            # Test loop
-            for (gray_images, _), (rgb_images, _) in zip(loader_gray, loader_rgb, ):
-                # Adversarial ground truths
-                valid = torch.ones(gray_images.size(0), 1).to(self.device)
-                fake = torch.zeros(gray_images.size(0), 1).to(self.device)
+        d_loss_per_batch = []
+        for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(loader_gray, loader_rgb)):
+            # --- Configure input ---
+            gray_images = gray_images.to(self.device)
+            rgb_images = rgb_images.to(self.device)
 
-                # Configure input
-                gray_images = gray_images.to(self.device)
-                rgb_images = rgb_images.to(self.device)
+            # Generate rgb images for discriminator training
+            gen_images = self.generator(gray_images)
 
-                # Generate RGB images from grayscale
-                gen_images = self.generator(gray_images)
-                fake_pred = self.discriminator(gen_images)
-                fake_pred_2d = fake_pred[:, :, 0, 0]
-                g_loss_pred = self.GANcriterion(fake_pred_2d, valid)
-                g_loss_rgb = self.MSEcriterion(gen_images, rgb_images)
-                g_loss = g_loss_pred + g_loss_rgb
-                test_loss.append(g_loss)
-        return sum(test_loss) / len(test_loss)
+            # Calculate discriminator loss
+            fake_preds = self.discriminator(gen_images.detach())
+            fake_loss = fake_preds.mean()
+            d_loss = fake_loss  # Since you don't calculate real loss here
+
+            # Save discriminator loss per batch
+            d_loss_per_batch.append(d_loss.item())
+
+        # Reset model to train mode (optional)
+        self.generator.train()
+        self.discriminator.train()
+        return sum(d_loss_per_batch) / len(d_loss_per_batch)
 
     def results_visualization(self):
         for (gray_images, _), (rgb_images, _) in zip(self.test_loader_gray, self.test_loader_rgb):
@@ -306,3 +178,108 @@ class ModelHandler:
 
                 plt.savefig("results/%d.jpg" % idx)
                 plt.close()
+
+    def gradient_penalty(self, D, xr, xf):
+        # [b, 1]
+        t = torch.rand(self.batch_size, 1, 1, 1)
+        t = t.expand(self.batch_size, 3, 256, 256)  # Expand t to match the size of xr
+
+        # interpolation
+        mid = t * xr + (1 - t) * xf
+        # set it to require grad info
+        mid.requires_grad_()
+        pred = D(mid)
+        grads = autograd.grad(outputs=pred, inputs=mid,
+                              grad_outputs=torch.ones_like(pred),
+                              create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+        gp = torch.pow(grads.norm(2, dim=1) - 1, 2).mean()
+
+        return gp
+
+    def train(self):
+        if os.path.exists('saved_models/generator_model.pth') and os.path.exists(
+                'saved_models/discriminator_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/generator_model.pth'))
+            self.discriminator.load_state_dict(torch.load('saved_models/discriminator_model.pth'))
+            print("Finished loading the previous trained models!")
+
+        elif os.path.exists('saved_models/pretrained_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
+            print("Finished loading the pretrained generator!")
+
+        d_loss_per_epoch = []
+        g_loss_per_epoch = []
+        accuracy = []
+        test_losses_g = []
+        val_losses_g = []
+
+        # configure to train mode
+        self.generator.train()
+        self.discriminator.train()
+
+        # Training loop
+        for epoch in range(self.num_epochs):
+            psnr_values = []
+            g_loss_per_batch = []
+            d_loss_per_batch = []
+
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
+                    zip(self.train_loader_gray, self.train_loader_rgb)):
+
+                # Generate RGB images from grayscale
+                gen_images = self.generator(gray_images)
+
+                gp = self.gradient_penalty(self.discriminator, rgb_images, gen_images.detach())
+
+                self.optimizer_D.zero_grad()
+                loss_d = -torch.mean(self.discriminator(rgb_images)) + torch.mean(self.discriminator(gen_images))
+                loss_d += 0.2 * gp
+                loss_d.backward()
+                self.optimizer_D.step()
+
+                if batch_idx % 5 == 0:
+                    self.optimizer_G.zero_grad()
+
+                    gen_imgs = self.generator(gray_images)
+                    loss_g = -torch.mean(self.discriminator(gen_imgs))
+                    loss_g.backward()
+                    self.optimizer_G.step()
+
+                    d_loss_per_batch.append(loss_d)
+                    g_loss_per_batch.append(loss_g)
+
+                    print(
+                        "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_d.item(), loss_g.item())
+                    )
+
+                # compute PSNR
+                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+
+                # Save the generated images
+                os.makedirs("images_per_epoch", exist_ok=True)
+                first_image_gen = prepare_to_save_image(gen_images[0])
+                first_image_grey = prepare_to_save_image(gray_images[0])
+                first_image_rbg = prepare_to_save_image(rgb_images[0])
+                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
+                plt.close()
+
+            # Update losses arrays
+            test_losses_g.append(self.test_model(self.test_loader_gray, self.test_loader_rgb))
+            val_losses_g.append(self.test_model(self.eval_loader_gray, self.eval_loader_rgb))
+
+            # Caluclate model accuracy
+            # Compute PSNR
+            avg_psnr = sum(psnr_values) / len(psnr_values)
+            accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
+
+            g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
+            d_loss_per_epoch.append(np.average([l.item() for l in d_loss_per_batch]))
+
+            # Save the generator model after every epoch
+            torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
+            torch.save(self.discriminator.state_dict(), 'saved_models/discriminator_model.pth')
+
+        return g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy
