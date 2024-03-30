@@ -92,9 +92,9 @@ class UNetGenerator(nn.Module):
         outputs = self.outputs(d4)
         return outputs
 
-class Discriminator(nn.Module):
+class Critic(nn.Module):
     def __init__(self):
-        super(Discriminator, self).__init__()
+        super(Critic, self).__init__()
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1),

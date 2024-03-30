@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import torch
 from torch import nn, optim, autograd
-from Gan import UNetGenerator, Discriminator
+from Gan import UNetGenerator, Critic
 import numpy as np
 
 D_ITERATION = 4
@@ -56,12 +56,12 @@ def compute_psnr(loader_gray, loader_rgb, model_handler):
 
 class ModelHandler:
     def __init__(self, test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray, eval_loader_gray, test_loader_gray,
-                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_D=LR, num_epochs_pre=EPOCHS):
+                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_C=LR, num_epochs_pre=EPOCHS):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_epochs = num_epochs
         self.num_epochs_pre = num_epochs_pre
         self.lr_G = lr_G
-        self.lr_D = lr_D
+        self.lr_C = lr_C
         self.batch_size = batch_size
         self.train_loader_rgb = train_loader_rgb
         self.eval_loader_rgb = eval_loader_rgb
@@ -74,9 +74,9 @@ class ModelHandler:
 
         #WGAN
         self.generator = UNetGenerator()
-        self.discriminator = Discriminator()
+        self.Critic = Critic()
         self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
-        self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_D, betas=(0.5, 0.999))
+        self.optimizer_C = optim.Adam(self.Critic.parameters(), lr=self.lr_C, betas=(0.5, 0.999))
 
     def pretrain_generator(self):
         if os.path.exists('saved_models/pretrained_model.pth'):
@@ -138,28 +138,28 @@ class ModelHandler:
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
         self.generator.eval()
-        self.discriminator.eval()
-        d_loss_per_batch = []
+        self.Critic.eval()
+        c_loss_per_batch = []
         for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(loader_gray, loader_rgb)):
             # --- Configure input ---
             gray_images = gray_images.to(self.device)
             rgb_images = rgb_images.to(self.device)
 
-            # Generate rgb images for discriminator training
+            # Generate rgb images for Critic training
             gen_images = self.generator(gray_images)
 
-            # Calculate discriminator loss
-            fake_preds = self.discriminator(gen_images.detach())
+            # Calculate Critic loss
+            fake_preds = self.Critic(gen_images.detach())
             fake_loss = fake_preds.mean()
-            d_loss = fake_loss  # Since you don't calculate real loss here
+            c_loss = fake_loss  # Since you don't calculate real loss here
 
-            # Save discriminator loss per batch
-            d_loss_per_batch.append(d_loss.item())
+            # Save Critic loss per batch
+            c_loss_per_batch.append(c_loss.item())
 
         # Reset model to train mode (optional)
         self.generator.train()
-        self.discriminator.train()
-        return sum(d_loss_per_batch) / len(d_loss_per_batch)
+        self.Critic.train()
+        return sum(c_loss_per_batch) / len(c_loss_per_batch)
 
     def results_visualization(self):
         for (gray_images, _), (rgb_images, _) in zip(self.test_loader_gray, self.test_loader_rgb):
@@ -199,16 +199,16 @@ class ModelHandler:
 
     def train(self):
         if os.path.exists('saved_models/generator_model.pth') and os.path.exists(
-                'saved_models/discriminator_model.pth'):
+                'saved_models/Critic_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/generator_model.pth'))
-            self.discriminator.load_state_dict(torch.load('saved_models/discriminator_model.pth'))
+            self.Critic.load_state_dict(torch.load('saved_models/Critic_model.pth'))
             print("Finished loading the previous trained models!")
 
         elif os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
             print("Finished loading the pretrained generator!")
 
-        d_loss_per_epoch = []
+        c_loss_per_epoch = []
         g_loss_per_epoch = []
         accuracy = []
         test_losses_g = []
@@ -216,13 +216,13 @@ class ModelHandler:
 
         # configure to train mode
         self.generator.train()
-        self.discriminator.train()
+        self.Critic.train()
 
         # Training loop
         for epoch in range(self.num_epochs):
             psnr_values = []
             g_loss_per_batch = []
-            d_loss_per_batch = []
+            c_loss_per_batch = []
 
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
                     zip(self.train_loader_gray, self.train_loader_rgb)):
@@ -230,28 +230,28 @@ class ModelHandler:
                 # Generate RGB images from grayscale
                 gen_images = self.generator(gray_images)
 
-                gp = self.gradient_penalty(self.discriminator, rgb_images, gen_images.detach())
+                gp = self.gradient_penalty(self.Critic, rgb_images, gen_images.detach())
 
-                self.optimizer_D.zero_grad()
-                loss_d = -torch.mean(self.discriminator(rgb_images)) + torch.mean(self.discriminator(gen_images))
-                loss_d += 0.2 * gp
-                loss_d.backward()
-                self.optimizer_D.step()
+                self.optimizer_C.zero_grad()
+                loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images))
+                loss_c += 0.2 * gp
+                loss_c.backward()
+                self.optimizer_C.step()
 
                 if batch_idx % 5 == 0:
                     self.optimizer_G.zero_grad()
 
                     gen_imgs = self.generator(gray_images)
-                    loss_g = -torch.mean(self.discriminator(gen_imgs))
+                    loss_g = -torch.mean(self.Critic(gen_imgs))
                     loss_g.backward()
                     self.optimizer_G.step()
 
-                    d_loss_per_batch.append(loss_d)
+                    c_loss_per_batch.append(loss_c)
                     g_loss_per_batch.append(loss_g)
 
                     print(
-                        "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_d.item(), loss_g.item())
+                        "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f]"
+                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item())
                     )
 
                 # compute PSNR
@@ -276,10 +276,10 @@ class ModelHandler:
             accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
 
             g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
-            d_loss_per_epoch.append(np.average([l.item() for l in d_loss_per_batch]))
+            c_loss_per_epoch.append(np.average([l.item() for l in c_loss_per_batch]))
 
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
-            torch.save(self.discriminator.state_dict(), 'saved_models/discriminator_model.pth')
+            torch.save(self.Critic.state_dict(), 'saved_models/Critic_model.pth')
 
-        return g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy
+        return g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy
