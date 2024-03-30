@@ -180,13 +180,13 @@ class ModelHandler:
 
     def gradient_penalty(self, real_images, fake_images):
         device = real_images.device
-        alpha = torch.rand(self.batch_size, 1, 1, 1, device=device)
+        alpha = torch.rand(real_images.size(0), 1, 1, 1, device=device)
         interpolated = (alpha * real_images + (1 - alpha) * fake_images).requires_grad_(True)
         pred = self.Critic(interpolated)
         gradients = torch.autograd.grad(outputs=pred, inputs=interpolated,
                                         grad_outputs=torch.ones(pred.size(), device=device),
                                         create_graph=True, retain_graph=True)[0]
-        gradients = gradients.view(self.batch_size, -1)
+        gradients = gradients.view(gradients.size(0), -1)
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 

@@ -55,7 +55,7 @@ def main():
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
     # start.record()
-    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+    g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
@@ -64,7 +64,7 @@ def main():
 
     # plots
     plot_graph(g_loss_per_epoch, "g_loss_per_epoch")
-    plot_graph(d_loss_per_epoch, "d_loss_per_epoch")
+    plot_graph(c_loss_per_epoch, "c_loss_per_epoch")
     plot_graph(accuracy, title="PSNR accuracy per epoch", y_label="Accuracy")
     # Convert CUDA tensors to numpy arrays
     test_losses_g = [l.item() for l in test_losses_g]
