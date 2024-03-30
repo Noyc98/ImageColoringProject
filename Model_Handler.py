@@ -5,7 +5,6 @@ from torch import nn, optim, autograd
 from Gan import UNetGenerator, Critic
 import numpy as np
 
-D_ITERATION = 4
 BATCH_SIZE  = 32
 EPOCHS      = 20
 LR          = 0.0001
@@ -179,23 +178,17 @@ class ModelHandler:
                 plt.savefig("results/%d.jpg" % idx)
                 plt.close()
 
-    def gradient_penalty(self, D, xr, xf):
-        # [b, 1]
-        t = torch.rand(self.batch_size, 1, 1, 1)
-        t = t.expand(self.batch_size, 3, 256, 256)  # Expand t to match the size of xr
-
-        # interpolation
-        mid = t * xr + (1 - t) * xf
-        # set it to require grad info
-        mid.requires_grad_()
-        pred = D(mid)
-        grads = autograd.grad(outputs=pred, inputs=mid,
-                              grad_outputs=torch.ones_like(pred),
-                              create_graph=True, retain_graph=True, only_inputs=True)[0]
-
-        gp = torch.pow(grads.norm(2, dim=1) - 1, 2).mean()
-
-        return gp
+    def gradient_penalty(self, real_images, fake_images):
+        device = real_images.device
+        alpha = torch.rand(self.batch_size, 1, 1, 1, device=device)
+        interpolated = (alpha * real_images + (1 - alpha) * fake_images).requires_grad_(True)
+        pred = self.Critic(interpolated)
+        gradients = torch.autograd.grad(outputs=pred, inputs=interpolated,
+                                        grad_outputs=torch.ones(pred.size(), device=device),
+                                        create_graph=True, retain_graph=True)[0]
+        gradients = gradients.view(self.batch_size, -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
 
     def train(self):
         if os.path.exists('saved_models/generator_model.pth') and os.path.exists(
@@ -230,11 +223,10 @@ class ModelHandler:
                 # Generate RGB images from grayscale
                 gen_images = self.generator(gray_images)
 
-                gp = self.gradient_penalty(self.Critic, rgb_images, gen_images.detach())
-
                 self.optimizer_C.zero_grad()
                 loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images))
-                loss_c += 0.2 * gp
+                gp = self.gradient_penalty(rgb_images, gen_images)
+                loss_c += 10 * gp
                 loss_c.backward()
                 self.optimizer_C.step()
 
