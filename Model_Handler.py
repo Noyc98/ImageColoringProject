@@ -230,7 +230,7 @@ class ModelHandler:
                 loss_c.backward()
                 self.optimizer_C.step()
 
-                if batch_idx % 5 == 0:
+                if batch_idx % 5 == 0 and (batch_idx != 0):
                     self.optimizer_G.zero_grad()
 
                     gen_imgs = self.generator(gray_images)
@@ -246,17 +246,16 @@ class ModelHandler:
                         % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item())
                     )
 
-                # compute PSNR
-                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
-
-                # Save the generated images
-                os.makedirs("images_per_epoch", exist_ok=True)
-                first_image_gen = prepare_to_save_image(gen_images[0])
-                first_image_grey = prepare_to_save_image(gray_images[0])
-                first_image_rbg = prepare_to_save_image(rgb_images[0])
-                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
-                plt.close()
+                    # compute PSNR
+                    psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
+                    # Save the generated images
+                    os.makedirs("images_per_epoch", exist_ok=True)
+                    first_image_gen = prepare_to_save_image(gen_images[0])
+                    first_image_grey = prepare_to_save_image(gray_images[0])
+                    first_image_rbg = prepare_to_save_image(rgb_images[0])
+                    plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                    plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
+                    plt.close()
 
             # Update losses arrays
             test_losses_g.append(self.test_model(self.test_loader_gray, self.test_loader_rgb))
