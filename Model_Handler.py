@@ -6,7 +6,7 @@ from Gan import UNetGenerator, Critic
 import numpy as np
 
 BATCH_SIZE  = 32
-EPOCHS      = 20
+EPOCHS      = 50
 LR          = 0.0001
 
 
