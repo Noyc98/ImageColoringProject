@@ -74,8 +74,8 @@ class ModelHandler:
         #WGAN
         self.generator = UNetGenerator()
         self.Critic = Critic()
-        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0.5, 0.999))
-        self.optimizer_C = optim.Adam(self.Critic.parameters(), lr=self.lr_C, betas=(0.5, 0.999))
+        self.optimizer_G = optim.Adam(self.generator.parameters(), lr=self.lr_G, betas=(0, 0.9))
+        self.optimizer_C = optim.Adam(self.Critic.parameters(), lr=self.lr_C, betas=(0, 0.9))
 
     def pretrain_generator(self):
         if os.path.exists('saved_models/pretrained_model.pth'):
@@ -113,7 +113,7 @@ class ModelHandler:
                 psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
                 print(
                     "[Epoch %d/%d] [Batch %d/%d] [G loss: %f]"
-                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss.item())
+                    % (epoch, self.num_epochs_pre, batch_idx, len(self.train_loader_gray), loss.item())
                 )
 
             # Compute PSNR
@@ -127,12 +127,9 @@ class ModelHandler:
                     epoch, self.num_epochs, np.average([l.item() for l in g_loss_per_batch]), avg_psnr
                 )
             )
-            # print(f"Epoch {epoch + 1}/{self.num_epochs_pre}")
-            epoch_minus_1 = EPOCHS - 1
 
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
-
 
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
@@ -181,6 +178,7 @@ class ModelHandler:
     def gradient_penalty(self, real_images, fake_images):
         device = real_images.device
         alpha = torch.rand(real_images.size(0), 1, 1, 1, device=device)
+        alpha.expand_as(real_images)
         interpolated = (alpha * real_images + (1 - alpha) * fake_images).requires_grad_(True)
         pred = self.Critic(interpolated)
         gradients = torch.autograd.grad(outputs=pred, inputs=interpolated,
@@ -212,31 +210,40 @@ class ModelHandler:
         self.Critic.train()
 
         # Training loop
-        for epoch in range(self.num_epochs):
+        for epoch in range(0, self.num_epochs):
             psnr_values = []
             g_loss_per_batch = []
             c_loss_per_batch = []
 
-            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
-                    zip(self.train_loader_gray, self.train_loader_rgb)):
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
 
                 # Generate RGB images from grayscale
                 gen_images = self.generator(gray_images)
-
                 self.optimizer_C.zero_grad()
-                loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images))
-                gp = self.gradient_penalty(rgb_images, gen_images)
+
+                loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
+                gp = self.gradient_penalty(rgb_images, gen_images.detach())
                 loss_c += 10 * gp
+
                 loss_c.backward()
                 self.optimizer_C.step()
 
                 if batch_idx % 5 == 0 and (batch_idx != 0):
-                    self.optimizer_G.zero_grad()
+                    # Freeze discriminator weights during generator training
+                    for param in self.Critic.parameters():
+                        param.requires_grad = False
 
+                    self.optimizer_G.zero_grad()
                     gen_imgs = self.generator(gray_images)
-                    loss_g = -torch.mean(self.Critic(gen_imgs))
+                    wgan_loss = -torch.mean(self.Critic(gen_imgs))
+                    mse_loss = self.MSEcriterion(rgb_images, gen_images.detach())
+                    loss_g = wgan_loss * 0.3 + mse_loss * 0.7
                     loss_g.backward()
                     self.optimizer_G.step()
+
+                    # Unfreeze discriminator weights
+                    for param in self.Critic.parameters():
+                        param.requires_grad = True
 
                     c_loss_per_batch.append(loss_c)
                     g_loss_per_batch.append(loss_g)

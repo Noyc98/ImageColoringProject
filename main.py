@@ -40,7 +40,8 @@ def main():
     # Define and initialize your model handler
     model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
                                  train_loader_gray,
-                                 eval_loader_gray, test_loader_gray, BATCH_SIZE, EPOCHS, LR, LR)
+                                 eval_loader_gray, test_loader_gray,
+                                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_C=LR, num_epochs_pre=4)
     print("Finished ModelHandler!")
 
     # Define Time
@@ -50,7 +51,7 @@ def main():
 
     # Train Model
     # start.record()
-    # model_handler.pretrain_generator()
+    model_handler.pretrain_generator()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
