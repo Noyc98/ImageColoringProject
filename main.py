@@ -49,17 +49,17 @@ def main():
     # end = torch.cuda.Event(enable_timing=True)
     # print(torch.cuda.is_available())
 
-    # Train Model
+    # Pretrain Generator
     # start.record()
-    # model_handler.pretrain_generator()
+    model_handler.pretrain_generator()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
+    print("Finished Pretrain Generator!")
+
+    # Train Model
     # start.record()
-    #g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
-
-    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train_wgan()
-
+    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
