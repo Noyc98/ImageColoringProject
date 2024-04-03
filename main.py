@@ -17,6 +17,7 @@ def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
 
     plt.legend()
     plt.savefig(f"results/graph_{title}")
+    plt.close()
     return
 
 
@@ -51,7 +52,7 @@ def main():
 
     # Train Model
     # start.record()
-    model_handler.pretrain_generator()
+    # model_handler.pretrain_generator()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
@@ -67,9 +68,6 @@ def main():
     plot_graph(g_loss_per_epoch, "g_loss_per_epoch")
     plot_graph(c_loss_per_epoch, "c_loss_per_epoch")
     plot_graph(accuracy, title="PSNR accuracy per epoch", y_label="Accuracy")
-    # Convert CUDA tensors to numpy arrays
-    test_losses_g = [l.item() for l in test_losses_g]
-    val_losses_g = [l.item() for l in val_losses_g]
     plot_graph(test_losses_g, "test_losses_g")
     plot_graph(val_losses_g, "val_losses_g")
 
