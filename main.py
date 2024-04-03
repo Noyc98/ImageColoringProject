@@ -4,11 +4,9 @@ from DataLoader import data_loader
 from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
 
-D_ITERATION = 4
 BATCH_SIZE  = 32
-EPOCHS      = 20
+EPOCHS      = 50
 LR          = 0.0001
-
 
 def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
     plt.cla()
@@ -18,7 +16,8 @@ def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
     plt.title("Loss")
 
     plt.legend()
-    plt.show()
+    plt.savefig(f"results/graph_{title}")
+    plt.close()
     return
 
 
@@ -29,7 +28,7 @@ def main():
     # target_size = (max_width, max_height)
     # pre_processing.resize_images("flowers_gray", target_size)
 
-    data_loader()
+    # data_loader()
     load_path = 'saved_models/data_loader.pkl'
     # Load the saved DataLoader objects and datasets
     with open(load_path, 'rb') as f:
@@ -40,8 +39,10 @@ def main():
 
     print("Finished data loading!")
     # Define and initialize your model handler
-    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb, train_loader_gray, eval_loader_gray, test_loader_gray,
-                                 BATCH_SIZE, EPOCHS, LR, LR, D_ITERATION)
+    model_handler = ModelHandler(test_dataset_gray, test_loader_rgb, train_loader_rgb, eval_loader_rgb,
+                                 train_loader_gray,
+                                 eval_loader_gray, test_loader_gray,
+                                 batch_size=BATCH_SIZE, num_epochs=EPOCHS, lr_G=LR, lr_C=LR, num_epochs_pre=4)
     print("Finished ModelHandler!")
 
     # Define Time
@@ -49,17 +50,14 @@ def main():
     # end = torch.cuda.Event(enable_timing=True)
     # print(torch.cuda.is_available())
 
-    # Pretrain Generator
+    # Train Model
     # start.record()
-    model_handler.pretrain_generator()
+    # model_handler.pretrain_generator()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
-    print("Finished Pretrain Generator!")
-
-    # Train Model
     # start.record()
-    g_loss_per_epoch, d_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+    g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
@@ -68,11 +66,8 @@ def main():
 
     # plots
     plot_graph(g_loss_per_epoch, "g_loss_per_epoch")
-    plot_graph(d_loss_per_epoch, "d_loss_per_epoch")
+    plot_graph(c_loss_per_epoch, "c_loss_per_epoch")
     plot_graph(accuracy, title="PSNR accuracy per epoch", y_label="Accuracy")
-    # Convert CUDA tensors to numpy arrays
-    test_losses_g = [l.item() for l in test_losses_g]
-    val_losses_g = [l.item() for l in val_losses_g]
     plot_graph(test_losses_g, "test_losses_g")
     plot_graph(val_losses_g, "val_losses_g")
 

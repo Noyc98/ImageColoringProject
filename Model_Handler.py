@@ -85,7 +85,17 @@ class ModelHandler:
         os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
         accuracy = []
         g_loss_per_epoch = []
-        for epoch in range(self.num_epochs_pre):
+        avg_psnr_per_epoch = []
+
+        # Load existing files
+        if os.path.exists('saved_models/accuracy.npy'):
+            accuracy = list(np.load('saved_models/accuracy.npy'))
+        if os.path.exists('saved_models/g_loss_per_epoch.npy'):
+            g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
+            avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
+
+        for epoch in range(len(accuracy), self.num_epochs_pre):
             psnr_values = []
             g_loss_per_batch = []
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
@@ -118,6 +128,7 @@ class ModelHandler:
 
             # Compute PSNR
             avg_psnr = sum(psnr_values) / len(psnr_values)
+            avg_psnr_per_epoch.append(avg_psnr)
             accuracy.append(avg_psnr)  # Append the average PSNR value to the accuracy list
             g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
 
@@ -130,6 +141,11 @@ class ModelHandler:
 
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
+
+            # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
+            np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
+            np.save('saved_models/accuracy.npy', np.array(accuracy))
+            np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
 
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
@@ -158,6 +174,7 @@ class ModelHandler:
         return sum(c_loss_per_batch) / len(c_loss_per_batch)
 
     def results_visualization(self):
+        counter = 0
         for (gray_images, _), (rgb_images, _) in zip(self.test_loader_gray, self.test_loader_rgb):
             # Configure input
             gray_images = gray_images.to(self.device)
@@ -172,8 +189,9 @@ class ModelHandler:
                 rgb_image_np = prepare_to_save_image(rgb_image)
                 plt = make_subplot(rgb_image_np, gray_image_np, gen_image_np)
 
-                plt.savefig("results/%d.jpg" % idx)
+                plt.savefig("results/image_%d.jpg" % counter)
                 plt.close()
+                counter += 1
 
     def gradient_penalty(self, real_images, fake_images):
         device = real_images.device
@@ -205,17 +223,26 @@ class ModelHandler:
         test_losses_g = []
         val_losses_g = []
 
+        # Load existing arrays
+        if os.path.exists('saved_models/c_loss_per_epoch.npy'):
+            c_loss_per_epoch = list(np.load('saved_models/c_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/g_loss_per_epoch.npy'):
+            g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/accuracy.npy'):
+            accuracy = list(np.load('saved_models/accuracy.npy'))
+
         # configure to train mode
         self.generator.train()
         self.Critic.train()
 
         # Training loop
-        for epoch in range(0, self.num_epochs):
+        for epoch in range(len(c_loss_per_epoch), self.num_epochs):
             psnr_values = []
             g_loss_per_batch = []
             c_loss_per_batch = []
 
-            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(self.train_loader_gray, self.train_loader_rgb)):
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
+                    zip(self.train_loader_gray, self.train_loader_rgb)):
 
                 # Generate RGB images from grayscale
                 gen_images = self.generator(gray_images)
@@ -234,10 +261,9 @@ class ModelHandler:
                         param.requires_grad = False
 
                     self.optimizer_G.zero_grad()
-                    gen_imgs = self.generator(gray_images)
-                    wgan_loss = -torch.mean(self.Critic(gen_imgs))
-                    mse_loss = self.MSEcriterion(rgb_images, gen_images.detach())
-                    loss_g = wgan_loss * 0.3 + mse_loss * 0.7
+                    wgan_loss = -torch.mean(self.Critic(gen_images))
+                    mse_loss = self.MSEcriterion(rgb_images, gen_images)
+                    loss_g = wgan_loss * 0.15 + mse_loss * 0.85
                     loss_g.backward()
                     self.optimizer_G.step()
 
@@ -248,13 +274,16 @@ class ModelHandler:
                     c_loss_per_batch.append(loss_c)
                     g_loss_per_batch.append(loss_g)
 
+                    # compute PSNR
+                    psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images.detach(), rgb_images)])
+
                     print(
-                        "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f]"
-                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item())
+                        "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
+                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item(),
+                           sum(psnr_values) / len(psnr_values)
+                           )
                     )
 
-                    # compute PSNR
-                    psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images, rgb_images)])
                     # Save the generated images
                     os.makedirs("images_per_epoch", exist_ok=True)
                     first_image_gen = prepare_to_save_image(gen_images[0])
@@ -275,6 +304,13 @@ class ModelHandler:
 
             g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
             c_loss_per_epoch.append(np.average([l.item() for l in c_loss_per_batch]))
+
+            # Save arrays after every epoch
+            np.save('saved_models/c_loss_per_epoch.npy', np.array(c_loss_per_epoch))
+            np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
+            np.save('saved_models/accuracy.npy', np.array(accuracy))
+            np.save('saved_models/test_losses_g.npy', np.array(test_losses_g))
+            np.save('saved_models/val_losses_g.npy', np.array(val_losses_g))
 
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/generator_model.pth')
