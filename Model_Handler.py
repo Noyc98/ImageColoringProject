@@ -38,7 +38,7 @@ def psnr(input_image, target_image):
     """
     mse = torch.mean((input_image - target_image) ** 2)
     psnr_val = 10 * torch.log10(1 / mse)
-    return psnr_val
+    return psnr_val.detach()
 
 
 def compute_psnr(loader_gray, loader_rgb, model_handler):
@@ -87,13 +87,13 @@ class ModelHandler:
         g_loss_per_epoch = []
         avg_psnr_per_epoch = []
 
-        # Load existing files
-        if os.path.exists('saved_models/accuracy.npy'):
-            accuracy = list(np.load('saved_models/accuracy.npy'))
-        if os.path.exists('saved_models/g_loss_per_epoch.npy'):
-            g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
-        if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
-            avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
+        # # Load existing files
+        # if os.path.exists('saved_models/accuracy.npy'):
+        #     accuracy = list(np.load('saved_models/accuracy.npy'))
+        # if os.path.exists('saved_models/g_loss_per_epoch.npy'):
+        #     g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
+        # if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
+        #     avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
 
         for epoch in range(len(accuracy), self.num_epochs_pre):
             psnr_values = []
@@ -142,10 +142,10 @@ class ModelHandler:
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
 
-            # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
-            np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
-            np.save('saved_models/accuracy.npy', np.array(accuracy))
-            np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
+            # # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
+            # np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
+            # np.save('saved_models/accuracy.npy', np.array(accuracy))
+            # np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
 
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
@@ -216,6 +216,8 @@ class ModelHandler:
         elif os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
             print("Finished loading the pretrained generator!")
+        else:
+            print("Starting to train without pretrained model!")
 
         c_loss_per_epoch = []
         g_loss_per_epoch = []
@@ -261,7 +263,7 @@ class ModelHandler:
                         param.requires_grad = False
 
                     self.optimizer_G.zero_grad()
-                    wgan_loss = -torch.mean(self.Critic(gen_images.detach()))
+                    wgan_loss = -torch.mean(self.Critic(gen_images))
                     mse_loss = self.MSEcriterion(rgb_images, gen_images)
                     loss_g = wgan_loss * 0.3 + mse_loss * 0.7
                     loss_g.backward()

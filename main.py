@@ -52,7 +52,7 @@ def main():
 
     # Train Model
     # start.record()
-    # model_handler.pretrain_generator()
+    model_handler.pretrain_generator()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
