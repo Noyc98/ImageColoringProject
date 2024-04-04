@@ -13,7 +13,7 @@ def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
     plt.plot(range(len(loss)), loss, label=title)
     plt.xlabel(f'{x_label} Steps - axis')
     plt.ylabel(f'{y_label} Value - axis')
-    plt.title("Loss")
+    plt.title(title)
 
     plt.legend()
     plt.savefig(f"results/graph_{title}")

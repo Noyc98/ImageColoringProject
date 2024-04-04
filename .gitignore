@@ -1,4 +1,10 @@
+*.npy
+*.pth
 *.png
 *.jpg
+*.pkl
+*.txt
+*.7z
+*.lnk
 /.idea
 /__pycache__

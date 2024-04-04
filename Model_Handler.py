@@ -80,6 +80,9 @@ class ModelHandler:
     def pretrain_generator(self):
         if os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
+            print("Finished loading the previous pretrained model")
+        else:
+            print("starting to pretrain the generator!")
 
         save_dir = 'saved_models'
         os.makedirs(save_dir, exist_ok=True)  # Create the directory if it doesn't exist
@@ -87,13 +90,13 @@ class ModelHandler:
         g_loss_per_epoch = []
         avg_psnr_per_epoch = []
 
-        # # Load existing files
-        # if os.path.exists('saved_models/accuracy.npy'):
-        #     accuracy = list(np.load('saved_models/accuracy.npy'))
-        # if os.path.exists('saved_models/g_loss_per_epoch.npy'):
-        #     g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
-        # if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
-        #     avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
+        # Load existing files
+        if os.path.exists('saved_models/pretrained_accuracy.npy'):
+            accuracy = list(np.load('saved_models/pretrained_accuracy.npy'))
+        if os.path.exists('saved_models/pretrained_g_loss_per_epoch.npy'):
+            g_loss_per_epoch = list(np.load('saved_models/pretrained_g_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/pretrained_avg_psnr_per_epoch.npy'):
+            avg_psnr_per_epoch = list(np.load('saved_models/pretrained_avg_psnr_per_epoch.npy'))
 
         for epoch in range(len(accuracy), self.num_epochs_pre):
             psnr_values = []
@@ -142,10 +145,10 @@ class ModelHandler:
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
 
-            # # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
-            # np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
-            # np.save('saved_models/accuracy.npy', np.array(accuracy))
-            # np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
+            # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
+            np.save('saved_models/pretrained_avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
+            np.save('saved_models/pretrained_accuracy.npy', np.array(accuracy))
+            np.save('saved_models/pretrained_g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
 
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
@@ -232,6 +235,10 @@ class ModelHandler:
             g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
         if os.path.exists('saved_models/accuracy.npy'):
             accuracy = list(np.load('saved_models/accuracy.npy'))
+        if os.path.exists('saved_models/test_losses_g.npy'):
+            test_losses_g = list(np.load('saved_models/test_losses_g.npy'))
+        if os.path.exists('saved_models/val_losses_g.npy'):
+            val_losses_g = list(np.load('saved_models/val_losses_g.npy'))
 
         # configure to train mode
         self.generator.train()
