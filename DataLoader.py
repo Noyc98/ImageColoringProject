@@ -9,6 +9,16 @@ from torch.utils.data import DataLoader
 
 
 def create_data_set(color_mode='gray'):
+    """
+    Create dataset and split it into train, validation, and test sets.
+
+    Args:
+    - color_mode (str): Color mode of the images. It can be 'gray' or 'rgb'.
+
+    Returns:
+    - tuple: A tuple containing paths to train, validation, and test folders, list of image filenames,
+             path to the data folder, and the dataset object.
+    """
     # Define transformations
     transform = transforms.Compose([
         transforms.Resize((256, 256)),  # Resize images to a fixed size
@@ -47,6 +57,12 @@ def create_data_set(color_mode='gray'):
 
 
 def data_loader():
+    """
+    Create and save data loaders for train, validation, and test sets.
+
+    Returns:
+    - None
+    """
     save_path = 'saved_models/data_loader.pkl'
     train_folder_gray, val_folder_gray, test_folder_gray, images_list_gray, data_path_gray, dataset_gray = create_data_set(
         color_mode='gray')
@@ -71,19 +87,11 @@ def data_loader():
     # Copy image files to destination folders
     for i, f in enumerate(images_list_gray):
         if i < train_size:
-            # dest_folder = train_folder_gray
-            # dest_folder_rgb = train_folder_rgb
             train_idx.append(i)
         elif i < train_size + val_size:
-            # dest_folder = val_folder_gray
-            # dest_folder_rgb = val_folder_rgb
             eval_idx.append(i)
         else:
-            # dest_folder = test_folder_gray
-            # dest_folder_rgb = test_folder_rgb
             test_idx.append(i)
-        # shutil.copy(os.path.join(data_path_gray, f), os.path.join(dest_folder, f))
-        # shutil.copy(os.path.join(data_path_rgb, f), os.path.join(dest_folder_rgb, f))
 
     # Create dataSet
     # Gray
