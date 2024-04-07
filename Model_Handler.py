@@ -1,4 +1,6 @@
 import os
+import random
+
 import matplotlib.pyplot as plt
 import torch
 from torch import nn, optim, autograd
@@ -209,6 +211,26 @@ class ModelHandler:
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
+    def load_data(self):
+        if os.path.exists('saved_models/generator_model.pth') and os.path.exists(
+                'saved_models/Critic_model.pth'):
+            self.generator.load_state_dict(torch.load('saved_models/generator_model.pth'))
+            self.Critic.load_state_dict(torch.load('saved_models/Critic_model.pth'))
+
+        # Load existing arrays
+        if os.path.exists('saved_models/c_loss_per_epoch.npy'):
+            c_loss_per_epoch = list(np.load('saved_models/c_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/g_loss_per_epoch.npy'):
+            g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
+        if os.path.exists('saved_models/accuracy.npy'):
+            accuracy = list(np.load('saved_models/accuracy.npy'))
+        if os.path.exists('saved_models/test_losses_g.npy'):
+            test_losses_g = list(np.load('saved_models/test_losses_g.npy'))
+        if os.path.exists('saved_models/val_losses_g.npy'):
+            val_losses_g = list(np.load('saved_models/val_losses_g.npy'))
+
+        return g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy
+
     def train(self):
         if os.path.exists('saved_models/generator_model.pth') and os.path.exists(
                 'saved_models/Critic_model.pth'):
@@ -253,33 +275,45 @@ class ModelHandler:
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
                     zip(self.train_loader_gray, self.train_loader_rgb)):
 
-                # Generate RGB images from grayscale
+                if batch_idx % 3 == 0:
+                    # Get a random batch index
+                    random_batch_idx1 = random.randint(0, len(self.train_loader_gray) - 1)
+                    random_batch_idx2 = random.randint(0, len(self.train_loader_gray) - 1)
+                    random_batch_idx3 = random.randint(0, len(self.train_loader_gray) - 1)
+
+                    # Get the random batch
+                    for i, ((critic_gray_images, _), (critic_rgb_images, _)) in enumerate(
+                            zip(self.train_loader_gray, self.train_loader_rgb)):
+                        if i == random_batch_idx1 or i == random_batch_idx2 or i == random_batch_idx3:
+                            # Generate RGB images from grayscale
+                            gen_images = self.generator(critic_gray_images)
+                            self.optimizer_C.zero_grad()
+
+                            loss_c = -torch.mean(self.Critic(critic_rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
+
+                            gp = self.gradient_penalty(critic_rgb_images, gen_images.detach())
+                            loss_c += 10 * gp
+
+                            loss_c.backward()
+                            self.optimizer_C.step()
+
+                # Freeze discriminator weights during generator training
+                for param in self.Critic.parameters():
+                    param.requires_grad = False
+
+                self.optimizer_G.zero_grad()
                 gen_images = self.generator(gray_images)
-                self.optimizer_C.zero_grad()
+                wgan_loss = -torch.mean(self.Critic(gen_images))
+                mse_loss = self.MSEcriterion(rgb_images, gen_images)
+                loss_g = wgan_loss * 0.3 + mse_loss * 0.7
+                loss_g.backward()
+                self.optimizer_G.step()
 
-                loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
-                gp = self.gradient_penalty(rgb_images, gen_images.detach())
-                loss_c += 10 * gp
-
-                loss_c.backward()
-                self.optimizer_C.step()
+                # Unfreeze discriminator weights
+                for param in self.Critic.parameters():
+                    param.requires_grad = True
 
                 if batch_idx % 5 == 0 and (batch_idx != 0):
-                    # Freeze discriminator weights during generator training
-                    for param in self.Critic.parameters():
-                        param.requires_grad = False
-
-                    self.optimizer_G.zero_grad()
-                    wgan_loss = -torch.mean(self.Critic(gen_images))
-                    mse_loss = self.MSEcriterion(rgb_images, gen_images)
-                    loss_g = wgan_loss * 0.3 + mse_loss * 0.7
-                    loss_g.backward()
-                    self.optimizer_G.step()
-
-                    # Unfreeze discriminator weights
-                    for param in self.Critic.parameters():
-                        param.requires_grad = True
-
                     c_loss_per_batch.append(loss_c)
                     g_loss_per_batch.append(loss_g)
 

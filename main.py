@@ -5,7 +5,7 @@ from Model_Handler import ModelHandler
 from PreProcessingHandler import PreProcessing
 
 BATCH_SIZE  = 32
-EPOCHS      = 50
+EPOCHS      = 80
 LR          = 0.0001
 
 def plot_graph(loss, title, x_label='Batch', y_label='Loss'):
@@ -58,6 +58,7 @@ def main():
     # print(f"Pre-Training time: {start.elapsed_time(end)} milliseconds")
     # start.record()
     g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.train()
+    # g_loss_per_epoch, c_loss_per_epoch, test_losses_g, val_losses_g, accuracy = model_handler.load_data()
     # end.record()
     # torch.cuda.synchronize()
     # print(f"Training time: {start.elapsed_time(end)} milliseconds")
