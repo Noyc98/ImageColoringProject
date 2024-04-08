@@ -4,6 +4,8 @@ import torch
 from torch import nn, optim, autograd
 from Gan import UNetGenerator, Critic
 import numpy as np
+import random
+from itertools import islice
 
 BATCH_SIZE  = 32
 EPOCHS      = 50
@@ -38,7 +40,7 @@ def psnr(input_image, target_image):
     """
     mse = torch.mean((input_image - target_image) ** 2)
     psnr_val = 10 * torch.log10(1 / mse)
-    return psnr_val
+    return psnr_val.detach()
 
 
 def compute_psnr(loader_gray, loader_rgb, model_handler):
@@ -87,13 +89,13 @@ class ModelHandler:
         g_loss_per_epoch = []
         avg_psnr_per_epoch = []
 
-        # Load existing files
-        if os.path.exists('saved_models/accuracy.npy'):
-            accuracy = list(np.load('saved_models/accuracy.npy'))
-        if os.path.exists('saved_models/g_loss_per_epoch.npy'):
-            g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
-        if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
-            avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
+        # # Load existing files
+        # if os.path.exists('saved_models/accuracy.npy'):
+        #     accuracy = list(np.load('saved_models/accuracy.npy'))
+        # if os.path.exists('saved_models/g_loss_per_epoch.npy'):
+        #     g_loss_per_epoch = list(np.load('saved_models/g_loss_per_epoch.npy'))
+        # if os.path.exists('saved_models/avg_psnr_per_epoch.npy'):
+        #     avg_psnr_per_epoch = list(np.load('saved_models/avg_psnr_per_epoch.npy'))
 
         for epoch in range(len(accuracy), self.num_epochs_pre):
             psnr_values = []
@@ -142,10 +144,10 @@ class ModelHandler:
             # Save the generator model after every epoch
             torch.save(self.generator.state_dict(), 'saved_models/pretrained_model.pth')
 
-            # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
-            np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
-            np.save('saved_models/accuracy.npy', np.array(accuracy))
-            np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
+            # # Save avg_psnr, accuracy, and g_loss_per_epoch after every epoch
+            # np.save('saved_models/avg_psnr_per_epoch.npy', np.array(avg_psnr_per_epoch))
+            # np.save('saved_models/accuracy.npy', np.array(accuracy))
+            # np.save('saved_models/g_loss_per_epoch.npy', np.array(g_loss_per_epoch))
 
     def test_model(self, loader_gray, loader_rgb):
         # Set model to eval mode (optional)
@@ -216,6 +218,8 @@ class ModelHandler:
         elif os.path.exists('saved_models/pretrained_model.pth'):
             self.generator.load_state_dict(torch.load('saved_models/pretrained_model.pth'))
             print("Finished loading the pretrained generator!")
+        else:
+            print("Starting to train without pretrained model!")
 
         c_loss_per_epoch = []
         g_loss_per_epoch = []
@@ -244,54 +248,64 @@ class ModelHandler:
             for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
                     zip(self.train_loader_gray, self.train_loader_rgb)):
 
-                # Generate RGB images from grayscale
-                gen_images = self.generator(gray_images)
-                self.optimizer_C.zero_grad()
+                # Critic Train With 5 Random Batch
+                for index_critic_train in range(5):
+                    # Sample a random index
+                    random_index = random.randint(0, len(self.train_loader_gray) - 1)
 
-                loss_c = -torch.mean(self.Critic(rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
-                gp = self.gradient_penalty(rgb_images, gen_images.detach())
-                loss_c += 10 * gp
+                    # Fetch the batch with the same index from both DataLoaders gray and rgb
+                    random_gray_images = next(islice(self.train_loader_gray, random_index, None))[0]
+                    random_rgb_images = next(islice(self.train_loader_rgb, random_index, None))[0]
 
-                loss_c.backward()
-                self.optimizer_C.step()
+                    # Generate RGB images from grayscale
+                    gen_images = self.generator(random_gray_images)
+                    self.optimizer_C.zero_grad()
 
-                if batch_idx % 5 == 0 and (batch_idx != 0):
-                    # Freeze discriminator weights during generator training
-                    for param in self.Critic.parameters():
-                        param.requires_grad = False
+                    loss_c = -torch.mean(self.Critic(random_rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
+                    gp = self.gradient_penalty(random_rgb_images, gen_images.detach())
+                    loss_c += 10 * gp
 
-                    self.optimizer_G.zero_grad()
-                    wgan_loss = -torch.mean(self.Critic(gen_images))
-                    mse_loss = self.MSEcriterion(rgb_images, gen_images)
-                    loss_g = wgan_loss * 0.15 + mse_loss * 0.85
-                    loss_g.backward()
-                    self.optimizer_G.step()
+                    loss_c.backward()
+                    self.optimizer_C.step()
+                    print("Critic Train Number %d Finish" %index_critic_train)
 
-                    # Unfreeze discriminator weights
-                    for param in self.Critic.parameters():
-                        param.requires_grad = True
+                # Freeze Critic weights during generator training
+                for param in self.Critic.parameters():
+                    param.requires_grad = False
 
-                    c_loss_per_batch.append(loss_c)
-                    g_loss_per_batch.append(loss_g)
+                # Generator Train
+                self.optimizer_G.zero_grad()
+                wgan_loss = -torch.mean(self.Critic(gen_images))
+                mse_loss = self.MSEcriterion(rgb_images, gen_images)
+                loss_g = wgan_loss * 0.15 + mse_loss * 0.85
+                loss_g.backward()
+                self.optimizer_G.step()
 
-                    # compute PSNR
-                    psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images.detach(), rgb_images)])
+                # Unfreeze Critic weights
+                for param in self.Critic.parameters():
+                    param.requires_grad = True
 
-                    print(
-                        "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
-                        % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item(),
-                           sum(psnr_values) / len(psnr_values)
-                           )
-                    )
+                c_loss_per_batch.append(loss_c)
+                g_loss_per_batch.append(loss_g)
 
-                    # Save the generated images
-                    os.makedirs("images_per_epoch", exist_ok=True)
-                    first_image_gen = prepare_to_save_image(gen_images[0])
-                    first_image_grey = prepare_to_save_image(gray_images[0])
-                    first_image_rbg = prepare_to_save_image(rgb_images[0])
-                    plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                    plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
-                    plt.close()
+                # compute PSNR
+                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images.detach(), rgb_images)])
+
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
+                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item(),
+                       sum(psnr_values) / len(psnr_values)
+                       )
+                )
+
+                # Save the generated images
+                os.makedirs("images_per_epoch", exist_ok=True)
+                first_image_gen = prepare_to_save_image(gen_images[0])
+                first_image_grey = prepare_to_save_image(gray_images[0])
+                first_image_rbg = prepare_to_save_image(rgb_images[0])
+                plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
+                plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
+                plt.close()
 
             # Update losses arrays
             test_losses_g.append(self.test_model(self.test_loader_gray, self.test_loader_rgb))

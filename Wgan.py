@@ -111,20 +111,24 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.conv4 = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.InstanceNorm2d(512),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.Conv2d(256, 1, kernel_size=4, stride=1, padding=1)
         )
-        self.conv5 = nn.Sequential(
-            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=1)
-        )
+
+        # self.conv4 = nn.Sequential(
+        #     nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+        #     nn.InstanceNorm2d(512),
+        #     nn.LeakyReLU(0.2, inplace=True)
+        # )
+        # self.conv5 = nn.Sequential(
+        #     nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=1)
+        # )
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.conv4(x)
-        x = self.conv5(x)
+        # x = self.conv5(x)
         return x
 # Define Wasserstein loss function
 def wasserstein_loss(y_true, y_pred):
