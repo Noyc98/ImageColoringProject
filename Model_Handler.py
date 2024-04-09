@@ -154,6 +154,7 @@ class ModelHandler:
         self.generator.eval()
         self.Critic.eval()
         c_loss_per_batch = []
+        psnr_values = []
         for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(zip(loader_gray, loader_rgb)):
             # --- Configure input ---
             gray_images = gray_images.to(self.device)
@@ -170,10 +171,15 @@ class ModelHandler:
             # Save Critic loss per batch
             c_loss_per_batch.append(c_loss.item())
 
+            # compute PSNR
+            psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images.detach(), rgb_images)])
+
         # Reset model to train mode (optional)
         self.generator.train()
         self.Critic.train()
-        return sum(c_loss_per_batch) / len(c_loss_per_batch)
+        accuracy = sum(psnr_values) / len(psnr_values)
+        loss = sum(c_loss_per_batch) / len(c_loss_per_batch)
+        return accuracy, loss
 
     def results_visualization(self):
         counter = 0
@@ -245,77 +251,73 @@ class ModelHandler:
             g_loss_per_batch = []
             c_loss_per_batch = []
 
-            # for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
-            #         zip(self.train_loader_gray, self.train_loader_rgb)):
+            for batch_idx, ((gray_images, _), (rgb_images, _)) in enumerate(
+                    zip(self.train_loader_gray, self.train_loader_rgb)):
 
-            # Critic Train With 5 Random Batch
-            for index_critic_train in range(10):
-                # Sample a random index
-                random_index = random.randint(0, len(self.train_loader_gray) - 1)
+                # Critic Train With 5 Random Batch
+                for index_critic_train in range(5):
+                    # Sample a random index
+                    random_index = random.randint(0, len(self.train_loader_gray) - 1)
 
-                # Fetch the batch with the same index from both DataLoaders gray and rgb
-                random_gray_images = next(islice(self.train_loader_gray, random_index, random_index+1))[0]
-                random_rgb_images = next(islice(self.train_loader_rgb, random_index, random_index+1))[0]
+                    # Fetch the batch with the same index from both DataLoaders gray and rgb
+                    random_gray_images = next(islice(self.train_loader_gray, random_index, None))[0]
+                    random_rgb_images = next(islice(self.train_loader_rgb, random_index, None))[0]
 
-                # Generate RGB images from grayscale
-                gen_images = self.generator(random_gray_images)
-                self.optimizer_C.zero_grad()
+                    # Generate RGB images from grayscale
+                    gen_images = self.generator(random_gray_images)
+                    self.optimizer_C.zero_grad()
 
-                loss_c = -torch.mean(self.Critic(random_rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
-                gp = self.gradient_penalty(random_rgb_images, gen_images.detach())
-                loss_c += 10 * gp
+                    loss_c = -torch.mean(self.Critic(random_rgb_images)) + torch.mean(self.Critic(gen_images.detach()))
+                    gp = self.gradient_penalty(random_rgb_images, gen_images.detach())
+                    loss_c += 10 * gp
 
-                loss_c.backward()
-                self.optimizer_C.step()
-                c_loss_per_batch.append(loss_c)
-                print("Critic Train Number %d Finish" %index_critic_train)
+                    loss_c.backward()
+                    self.optimizer_C.step()
+                    print("Critic Train Number %d Finish" %index_critic_train)
 
-            # Freeze Critic weights during generator training
-            for param in self.Critic.parameters():
-                param.requires_grad = False
+                # Freeze Critic weights during generator training
+                for param in self.Critic.parameters():
+                    param.requires_grad = False
 
-            # Generator Train With 2 Random Batch
-            for index_generator_train in range(5):
-                # Sample a random index
-                random_index = random.randint(0, len(self.train_loader_gray) - 1)
-
-                # Fetch the batch with the same index from both DataLoaders gray and rgb
-                random_gray_images = next(islice(self.train_loader_gray, random_index, random_index + 1))[0]
-                random_rgb_images = next(islice(self.train_loader_rgb, random_index, random_index + 1))[0]
-
+                # Generator Train
                 self.optimizer_G.zero_grad()
-                gen_images = self.generator(random_gray_images)
                 wgan_loss = -torch.mean(self.Critic(gen_images))
-                mse_loss = self.MSEcriterion(random_rgb_images, gen_images)
+                mse_loss = self.MSEcriterion(rgb_images, gen_images)
                 loss_g = wgan_loss * 0.15 + mse_loss * 0.85
                 loss_g.backward()
                 self.optimizer_G.step()
 
+                # Unfreeze Critic weights
+                for param in self.Critic.parameters():
+                    param.requires_grad = True
+
+                c_loss_per_batch.append(loss_c)
                 g_loss_per_batch.append(loss_g)
 
                 # compute PSNR
-                psnr_values.extend(
-                    [psnr(gen_img, random_rgb_images) for gen_img, random_rgb_images in
-                     zip(gen_images.detach(), random_rgb_images)])
+                psnr_values.extend([psnr(gen_img, rgb_img) for gen_img, rgb_img in zip(gen_images.detach(), rgb_images)])
+
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
+                    % (epoch, self.num_epochs, batch_idx, len(self.train_loader_gray), loss_c.item(), loss_g.item(),
+                       sum(psnr_values) / len(psnr_values)
+                       )
+                )
 
                 # Save the generated images
                 os.makedirs("images_per_epoch", exist_ok=True)
                 first_image_gen = prepare_to_save_image(gen_images[0])
-                first_image_grey = prepare_to_save_image(random_gray_images[0])
-                first_image_rbg = prepare_to_save_image(random_rgb_images[0])
+                first_image_grey = prepare_to_save_image(gray_images[0])
+                first_image_rbg = prepare_to_save_image(rgb_images[0])
                 plt = make_subplot(first_image_rbg, first_image_grey, first_image_gen)
-                plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{random_index}.jpg")
+                plt.savefig(f"images_per_epoch/image_epoch_{epoch}batch{batch_idx}.jpg")
                 plt.close()
 
-                print("Generator Train Number %d Finish" %index_generator_train)
-
-            # Unfreeze Critic weights
-            for param in self.Critic.parameters():
-                param.requires_grad = True
-
             # Update losses arrays
-            test_losses_g.append(self.test_model(self.test_loader_gray, self.test_loader_rgb))
-            val_losses_g.append(self.test_model(self.eval_loader_gray, self.eval_loader_rgb))
+            test_accuracy, test_loss = self.test_model(self.test_loader_gray, self.test_loader_rgb)
+            test_losses_g.append(test_accuracy)
+            val_accuracy, val_loss = self.test_model(self.test_loader_gray, self.test_loader_rgb)
+            val_losses_g.append(val_loss)
 
             # Caluclate model accuracy
             # Compute PSNR
@@ -324,11 +326,6 @@ class ModelHandler:
 
             g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
             c_loss_per_epoch.append(np.average([l.item() for l in c_loss_per_batch]))
-
-            print(
-                "[Epoch %d/%d]  [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
-                % (epoch, self.num_epochs, c_loss_per_epoch[-1], g_loss_per_epoch[-1], accuracy[-1])
-            )
 
             # Save arrays after every epoch
             np.save('saved_models/c_loss_per_epoch.npy', np.array(c_loss_per_epoch))
