@@ -281,6 +281,7 @@ class ModelHandler:
 
                 # Generator Train
                 self.optimizer_G.zero_grad()
+                gen_images = self.generator(gray_images)
                 wgan_loss = -torch.mean(self.Critic(gen_images))
                 mse_loss = self.MSEcriterion(rgb_images, gen_images)
                 loss_g = wgan_loss * 0.15 + mse_loss * 0.85
