@@ -267,6 +267,7 @@ class ModelHandler:
 
                 loss_c.backward()
                 self.optimizer_C.step()
+                c_loss_per_batch.append(loss_c)
                 print("Critic Train Number %d Finish" %index_critic_train)
 
             # Freeze Critic weights during generator training
@@ -290,20 +291,12 @@ class ModelHandler:
                 loss_g.backward()
                 self.optimizer_G.step()
 
-                c_loss_per_batch.append(loss_c)
                 g_loss_per_batch.append(loss_g)
 
                 # compute PSNR
                 psnr_values.extend(
                     [psnr(gen_img, random_rgb_images) for gen_img, random_rgb_images in
                      zip(gen_images.detach(), random_rgb_images)])
-
-                print(
-                    "[Epoch %d/%d] [Batch %d/%d] [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
-                    % (epoch, self.num_epochs, random_index, len(self.train_loader_gray), loss_c.item(), loss_g.item(),
-                       sum(psnr_values) / len(psnr_values)
-                       )
-                )
 
                 # Save the generated images
                 os.makedirs("images_per_epoch", exist_ok=True)
@@ -331,6 +324,11 @@ class ModelHandler:
 
             g_loss_per_epoch.append(np.average([l.item() for l in g_loss_per_batch]))
             c_loss_per_epoch.append(np.average([l.item() for l in c_loss_per_batch]))
+
+            print(
+                "[Epoch %d/%d]  [Critic loss: %f] [G loss: %f] [PSNR accuracy: %f]"
+                % (epoch, self.num_epochs, c_loss_per_epoch[-1], g_loss_per_epoch[-1], accuracy[-1])
+            )
 
             # Save arrays after every epoch
             np.save('saved_models/c_loss_per_epoch.npy', np.array(c_loss_per_epoch))
