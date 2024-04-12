@@ -38,6 +38,7 @@ class encoder_block(nn.Module):
         super().__init__()
         self.conv = conv_block(in_c, out_c)
         self.pool = nn.MaxPool2d((2, 2))
+
     def forward(self, inputs):
         x = self.conv(inputs)
         p = self.pool(x)
@@ -48,12 +49,14 @@ class decoder_block(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
-        self.conv = conv_block(out_c+out_c, out_c)
+        self.conv = conv_block(out_c + out_c, out_c)
+
     def forward(self, inputs, skip):
         x = self.up(inputs)
         x = torch.cat([x, skip], axis=1)
         x = self.conv(x)
         return x
+
 
 # Define Generator (U-Net) architecture with VGG blocks
 class UNetGenerator(nn.Module):
@@ -92,6 +95,7 @@ class UNetGenerator(nn.Module):
         outputs = self.outputs(d4)
         return outputs
 
+
 class Critic(nn.Module):
     def __init__(self):
         super(Critic, self).__init__()
@@ -126,6 +130,7 @@ class Critic(nn.Module):
         x = self.conv4(x)
         x = self.conv5(x)
         return x
+
 
 # Define Wasserstein loss function
 def wasserstein_loss(y_true, y_pred):
