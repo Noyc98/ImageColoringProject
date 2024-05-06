@@ -1,6 +1,6 @@
 Here's the README content formatted for copy-pasting into a Git repository:
 
-```
+
 # Image Coloring Project
 
 This project focuses on colorizing grayscale images of flowers using a WGAN (Wasserstein Generative Adversarial Network) with gradient penalty and Mean Squared Error (MSE) loss.
@@ -57,4 +57,4 @@ The project includes visualizations of the training and validation losses, accur
 3. Run the `ImageColoringProject.ipynb` notebook to train the model and generate colorized images.
 
 Note: The project includes pre-trained models and saved results, so you can explore the generated images without retraining the model.
-```
+
