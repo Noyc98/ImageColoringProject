@@ -1,6 +1,3 @@
-Here's the README content formatted for copy-pasting into a Git repository:
-
-
 # Image Coloring Project
 
 This project focuses on colorizing grayscale images of flowers using a WGAN (Wasserstein Generative Adversarial Network) with gradient penalty and Mean Squared Error (MSE) loss.
