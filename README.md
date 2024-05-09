@@ -36,10 +36,10 @@ The Adam optimizer was used, as it is widely recommended for WGANs due to its ef
 
 Initially, only the generator was pre-trained for 4 epochs with MSE loss to initialize the weights and improve convergence.
 
-![preTrainning1](./Resources/preTrainning1.png)
-![preTrainning2](./Resources/preTrainning2.png)
-![preTrainning3](./Resources/preTrainning3.png)
-![preTrainning4](./Resources/preTrainning4.png)
+![preTrainning1](./Resources/preTrainning1.jpg)
+![preTrainning2](./Resources/preTrainning2.jpg)
+![preTrainning3](./Resources/preTrainning3.jpg)
+![preTrainning4](./Resources/preTrainning4.jpg)
 
 ## Training
 
@@ -55,28 +55,28 @@ The model was trained for 95 epochs, with an alternating training scheme between
 ![train4](./Resources/train4.png)
 
 **Tain Graphs**:
-![TrainCriticLoss](./Resources/TrainCriticLoss.png)
-![TrainMseLoss](./Resources/TrainMseLoss.png)
-![TrainPsnr](./Resources/TrainPsnr.png)
+![TrainCriticLoss](./Resources/TrainCriticLoss.jpg)
+![TrainMseLoss](./Resources/TrainMseLoss.jpg)
+![TrainPsnr](./Resources/TrainPsnr.jpg)
 
 **Validation**:
 
-![validationMseLoss](./Resources/validationMseLoss.png)
+![validationMseLoss](./Resources/validationMseLoss.jpg)
 
 - **Test & Accuracy**: The Peak Signal-to-Noise Ratio (PSNR) was used to evaluate the performance and quality of the model by comparing the generated RGB images to the original RGB images. A higher PSNR value indicates better reconstruction quality.
 
 
 **Test Graphs**:
 
-![testPsnr](./Resources/testPsnr.png)
+![testPsnr](./Resources/testPsnr.jpg)
 
 ## Results
 The project includes visualizations of the training and validation losses, accuracy (PSNR), and sample generated images.
 
-![test1](./Resources/test1.png)
-![test2](./Resources/test2.png)
-![test3](./Resources/test3.png)
-![test4](./Resources/test4.png)
+![test1](./Resources/test1.jpg)
+![test2](./Resources/test2.jpg)
+![test3](./Resources/test3.jpg)
+![test4](./Resources/test4.jpg)
 
 ## How to Run
 
